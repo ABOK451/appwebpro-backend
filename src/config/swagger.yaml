@@ -3,8 +3,10 @@ info:
   title: API de Ejemplo
   description: Documentación de ejemplo con Swagger UI
   version: 1.0.0
+
 servers:
   - url: http://localhost:3000
+
 paths:
   /ping:
     get:
@@ -12,3 +14,64 @@ paths:
       responses:
         '200':
           description: Servidor responde correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "pong"
+
+  /usuarios:
+    get:
+      summary: Lista todos los usuarios
+      responses:
+        '200':
+          description: Lista de usuarios
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      example: 1
+                    nombre:
+                      type: string
+                      example: "Alan"
+                    email:
+                      type: string
+                      example: "alan@example.com"
+                    rol:
+                      type: string
+                      example: "admin"
+
+  /usuarios/nuevo:
+    post:
+      summary: Crear un nuevo usuario
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                  example: "Nuevo Usuario"
+                email:
+                  type: string
+                  example: "nuevo@example.com"
+                password:
+                  type: string
+                  example: "123456"
+                rol:
+                  type: string
+                  enum: [admin, editor, lector]
+                  example: "lector"
+      responses:
+        '302':
+          description: Redirige a /usuarios después de crear
