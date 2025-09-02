@@ -1,0 +1,14 @@
+openapi: 3.0.0
+info:
+  title: API de Ejemplo
+  description: Documentación de ejemplo con Swagger UI
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /ping:
+    get:
+      summary: Verifica si el servidor está activo
+      responses:
+        '200':
+          description: Servidor responde correctamente
