@@ -55,7 +55,7 @@ paths:
       requestBody:
         required: true
         content:
-          application/x-www-form-urlencoded:
+          application/json:   
             schema:
               type: object
               properties:
@@ -73,5 +73,22 @@ paths:
                   enum: [admin, editor, lector]
                   example: "lector"
       responses:
-        '302':
-          description: Redirige a /usuarios después de crear
+        '200':
+          description: Usuario creado exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 5
+                  nombre:
+                    type: string
+                    example: "Nuevo Usuario"
+                  email:
+                    type: string
+                    example: "nuevo@example.com"
+                  rol:
+                    type: string
+                    example: "lector"
