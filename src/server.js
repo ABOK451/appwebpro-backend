@@ -9,7 +9,7 @@ const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-const swaggerDocument = YAML.load("./src/config/swagger.yaml");
+const swaggerDocument = YAML.load("./src/config/OpenApi/swagger.yaml");
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 app.use("/", pingRoutes);        
