@@ -1,0 +1,28 @@
+type: object
+properties:
+  nombre:
+    type: string
+    example: "Nuevo Usuario"
+  correo:
+    type: string
+    example: "nuevo@example.com"
+  password:
+    type: string
+    example: "123456"
+  rol:
+    type: string
+    enum: [admin, editor, lector]
+    example: "lector"
+  estado:
+    type: string
+    enum: [activo, inactivo, bloqueado]
+    example: "activo"
+  app:
+    type: string
+    example: "Venegas"
+  apm:
+    type: string
+    example: "Cadena"
+  telefono:
+    type: string
+    example: "5512345678"

@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
-  title: API de Ejemplo
-  description: Documentación de ejemplo con Swagger UI
+  title: API de Usuarios
+  description: Documentación funcional con Swagger UI
   version: 1.0.0
 
 servers:
@@ -39,15 +39,27 @@ paths:
                     id:
                       type: integer
                       example: 1
+                    correo:
+                      type: string
+                      example: "alan@example.com"
                     nombre:
                       type: string
                       example: "Alan"
-                    email:
+                    app:
                       type: string
-                      example: "alan@example.com"
+                      example: "Venegas"
+                    apm:
+                      type: string
+                      example: "Cadena"
                     rol:
                       type: string
                       example: "admin"
+                    estado:
+                      type: string
+                      example: "activo"
+                    telefono:
+                      type: string
+                      example: "5512345678"
 
   /usuarios/nuevo:
     post:
@@ -55,14 +67,14 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:   
+          application/json:
             schema:
               type: object
               properties:
                 nombre:
                   type: string
                   example: "Nuevo Usuario"
-                email:
+                correo:
                   type: string
                   example: "nuevo@example.com"
                 password:
@@ -72,8 +84,21 @@ paths:
                   type: string
                   enum: [admin, editor, lector]
                   example: "lector"
+                estado:
+                  type: string
+                  enum: [activo, inactivo, bloqueado]
+                  example: "activo"
+                app:
+                  type: string
+                  example: "Venegas"
+                apm:
+                  type: string
+                  example: "Cadena"
+                telefono:
+                  type: string
+                  example: "5512345678"
       responses:
-        '200':
+        '201':
           description: Usuario creado exitosamente
           content:
             application/json:
@@ -86,9 +111,21 @@ paths:
                   nombre:
                     type: string
                     example: "Nuevo Usuario"
-                  email:
+                  correo:
                     type: string
                     example: "nuevo@example.com"
                   rol:
                     type: string
                     example: "lector"
+                  estado:
+                    type: string
+                    example: "activo"
+                  app:
+                    type: string
+                    example: "Venegas"
+                  apm:
+                    type: string
+                    example: "Cadena"
+                  telefono:
+                    type: string
+                    example: "5512345678"
