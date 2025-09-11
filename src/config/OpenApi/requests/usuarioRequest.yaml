@@ -11,8 +11,8 @@ properties:
     example: "123456"
   rol:
     type: string
-    enum: [admin, editor, lector]
-    example: "lector"
+    enum: [admin, user]
+    example: "user"
   estado:
     type: string
     enum: [activo, inactivo, bloqueado]
