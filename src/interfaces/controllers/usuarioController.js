@@ -157,8 +157,7 @@ const resetPassword = async (req, res) => {
 
     const saltRounds = 10;
     const hash = await bcrypt.hash(nuevaPassword, saltRounds);
-
-    await UsuarioService.actualizar(correo, { password: hash });
+    await UsuarioService.actualizar(correo, { passwordHash: hash });
 
     res.json({ mensaje: "Contraseña restablecida con éxito" });
   } catch (error) {

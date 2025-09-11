@@ -26,9 +26,8 @@ class UsuarioService {
     return new Usuario(u.id, u.correo, hash, u.rol, u.estado, u.nombre, u.app, u.apm, u.telefono);
   }
 
-  static async actualizar(correoBuscado, datos) {
-    const { correo, password, rol, estado, nombre, app, apm, telefono } = datos;
-    let passwordHash = password ? await bcrypt.hash(password, 10) : null;
+  static async actualizar(correoBuscado, { correo, password, rol, estado, nombre, app, apm, telefono, passwordHash }) {
+    const hashFinal = passwordHash || (password ? await bcrypt.hash(password, 10) : null);
 
     const res = await pool.query(
       `UPDATE usuarios
@@ -43,14 +42,15 @@ class UsuarioService {
         telefono = COALESCE($8, telefono)
       WHERE correo = $9
       RETURNING id, correo, rol, estado, nombre, app, apm, telefono`,
-      [correo, passwordHash, rol, estado, nombre, app, apm, telefono, correoBuscado]
+      [correo, hashFinal, rol, estado, nombre, app, apm, telefono, correoBuscado]
     );
 
     if (res.rows.length === 0) return null;
 
     const u = res.rows[0];
-    return new Usuario(u.id, u.correo, passwordHash || null, u.rol, u.estado, u.nombre, u.app, u.apm, u.telefono);
+    return new Usuario(u.id, u.correo, hashFinal, u.rol, u.estado, u.nombre, u.app, u.apm, u.telefono);
   }
+
 
 
   static async eliminar({ correo }) {
