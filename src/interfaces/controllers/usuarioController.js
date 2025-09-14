@@ -1,8 +1,11 @@
 const UsuarioService = require('../../application/usuarioService');
 const bcrypt = require('bcrypt'); 
 const jwt = require('jsonwebtoken');
+const transporter = require('../../config/email'); 
+require('dotenv').config();
 
-const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+const nombreRegex = /^[A-Za-z]+$/;
 
 const listarUsuarios = async (req, res) => {
   try {
@@ -33,15 +36,32 @@ const crearUsuario = async (req, res) => {
       return res.status(400).json({ error: "El teléfono debe incluir código de país y 10 dígitos, ejemplo +521234567890" });
     }
     if (!passwordRegex.test(password)) {
-      return res.status(400).json({ error: "La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula, un número y un carácter especial" });
+      return res.status(400).json({ error: "La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" });
+    }
+    if (!nombreRegex.test(nombre)) {
+      return res.status(400).json({ error: "El nombre no debe contener números ni caracteres especiales" });
+    }
+    if (app && !nombreRegex.test(app)) {
+      return res.status(400).json({ error: "El apellido paterno no debe contener números ni caracteres especiales" });
+    }
+    if (apm && !nombreRegex.test(apm)) {
+      return res.status(400).json({ error: "El apellido materno no debe contener números ni caracteres especiales" });
     }
 
-    const nuevoUsuario = await UsuarioService.crear({ correo, password, rol, estado, nombre, app, apm, telefono });
+    const hash = await bcrypt.hash(password, 10);
+    const nuevoUsuario = await UsuarioService.crear({ correo, password: hash, rol, estado, nombre, app, apm, telefono });
     res.status(201).json({ mensaje: "Usuario creado con éxito", usuario: nuevoUsuario });
+    
   } catch (error) {
+    // Captura el error de clave duplicada de PostgreSQL
+    if (error.code === '23505' && error.detail && error.detail.includes('correo')) {
+      return res.status(400).json({ error: "El correo ya existe, no se puede repetir" });
+    }
+
     res.status(400).json({ error: `Error al crear usuario: ${error.message}` });
   }
 };
+
 
 const eliminarUsuario = async (req, res) => {
   try {
@@ -49,11 +69,9 @@ const eliminarUsuario = async (req, res) => {
     if (!correo) return res.status(400).json({ error: "El correo es requerido para eliminar un usuario" });
 
     const usuarioEliminado = await UsuarioService.eliminar({ correo });
-    if (!usuarioEliminado) {
-      return res.status(404).json({ error: `Usuario con correo ${correo} no encontrado` });
-    }
+    if (!usuarioEliminado) return res.status(404).json({ error: `Usuario con correo ${correo} no encontrado` });
 
-    res.json({ mensaje: `Usuario con correo ${usuarioEliminado.correo} eliminado con éxito` });
+    res.json({ mensaje: `Usuario ${usuarioEliminado.nombre} eliminado con éxito` });
   } catch (error) {
     res.status(500).json({ error: `Error al eliminar usuario: ${error.message}` });
   }
@@ -61,23 +79,30 @@ const eliminarUsuario = async (req, res) => {
 
 const actualizarUsuario = async (req, res) => {
   try {
-    const { correo } = req.body;
+    const { correo, password, telefono, nombre, app, apm } = req.body;
     if (!correo) return res.status(400).json({ error: "El correo del usuario a actualizar es requerido" });
 
-    const datos = req.body;
-
-    // Validaciones opcionales al actualizar
-    if (datos.telefono && !/^\+\d{1,3}\d{10}$/.test(datos.telefono)) {
+    if (telefono && !/^\+\d{1,3}\d{10}$/.test(telefono)) {
       return res.status(400).json({ error: "El teléfono debe incluir código de país y 10 dígitos" });
     }
-    if (datos.password && !passwordRegex.test(datos.password)) {
-      return res.status(400).json({ error: "La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula, un número y un carácter especial" });
+    if (password && !passwordRegex.test(password)) {
+      return res.status(400).json({ error: "La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" });
+    }
+    if (nombre && !nombreRegex.test(nombre)) {
+      return res.status(400).json({ error: "El nombre no debe contener números ni caracteres especiales" });
+    }
+    if (app && !nombreRegex.test(app)) {
+      return res.status(400).json({ error: "El apellido paterno no debe contener números ni caracteres especiales" });
+    }
+    if (apm && !nombreRegex.test(apm)) {
+      return res.status(400).json({ error: "El apellido materno no debe contener números ni caracteres especiales" });
     }
 
-    const usuarioActualizado = await UsuarioService.actualizar(correo, datos);
-    if (!usuarioActualizado) {
-      return res.status(404).json({ error: `Usuario con correo ${correo} no encontrado` });
-    }
+    const datosActualizar = { ...req.body };
+    if (password) datosActualizar.password = await bcrypt.hash(password, 10);
+
+    const usuarioActualizado = await UsuarioService.actualizar(correo, datosActualizar);
+    if (!usuarioActualizado) return res.status(404).json({ error: `Usuario con correo ${correo} no encontrado` });
 
     res.json({ mensaje: "Usuario actualizado con éxito", usuario: usuarioActualizado });
   } catch (error) {
@@ -117,55 +142,77 @@ const loginUsuario = async (req, res) => {
   }
 };
 
-const recuperarPassword = async (req, res) => {
+const solicitarReset = async (req, res) => {
   try {
     const { correo } = req.body;
-    if (!correo) return res.status(400).json({ error: "El correo es requerido para recuperar contraseña" });
+    if (!correo) return res.status(400).json({ error: "El correo es requerido" });
 
     const usuario = await UsuarioService.buscarPorCorreo(correo);
     if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
 
-    const token = jwt.sign(
-      { id: usuario.id, correo: usuario.correo },
-      process.env.JWT_SECRET || 'mi_secreto_jwt',
-      { expiresIn: '15m' }
-    );
+    const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+    const expira = new Date(Date.now() + 15 * 60000); // 15 minutos
 
-    res.json({ mensaje: "Token de recuperación generado con éxito", token });
+    const usuarioActualizado = await UsuarioService.actualizar(correo, { reset_code: codigo, reset_expires: expira });
+    if (!usuarioActualizado) return res.status(500).json({ error: "No se pudo actualizar el código de recuperación" });
+
+    await transporter.sendMail({
+      from: `"Soporte App" <${process.env.EMAIL_USER}>`,
+      to: correo,
+      subject: "Recuperación de contraseña",
+      text: `Tu código de recuperación es: ${codigo}. Válido por 15 minutos.`,
+      html: `<p>Hola ${usuario.nombre},</p>
+            <p>Tu código de recuperación es: <b>${codigo}</b></p>
+            <p>Válido por 15 minutos.</p>`
+    });
+
+    res.json({ mensaje: "Código de verificación enviado al correo" });
   } catch (error) {
-    res.status(500).json({ error: `Error al generar token de recuperación: ${error.message}` });
+    console.error("Error solicitarReset:", error);
+    res.status(500).json({ error: `Error al generar código: ${error.message}` });
   }
 };
 
-const resetPassword = async (req, res) => {
+const resetConCodigo = async (req, res) => {
   try {
-    const { token, correo, nuevaPassword } = req.body;
-    if (!token || !correo || !nuevaPassword) 
-      return res.status(400).json({ error: "Token, correo y nueva contraseña son requeridos" });
-
-    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/.test(nuevaPassword)) {
-      return res.status(400).json({ 
-        error: "La nueva contraseña debe tener mínimo 8 caracteres, al menos una mayúscula, una minúscula, un número y un carácter especial"
-      });
+    const { correo, codigo, nuevaPassword } = req.body;
+    if (!correo || !codigo || !nuevaPassword) {
+      return res.status(400).json({ error: "Correo, código y nueva contraseña son requeridos" });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'mi_secreto_jwt');
+    const usuario = await UsuarioService.buscarPorCorreo(correo);
+    if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
 
-    if (decoded.correo !== correo) {
-      return res.status(401).json({ error: "El token no coincide con el correo proporcionado" });
+    if (
+      !usuario.reset_code ||
+      usuario.reset_code.toString().trim() !== codigo.toString().trim() ||
+      new Date() > new Date(usuario.reset_expires)
+    ) {
+      return res.status(400).json({ error: "Código inválido o expirado" });
     }
 
-    const saltRounds = 10;
-    const hash = await bcrypt.hash(nuevaPassword, saltRounds);
-    await UsuarioService.actualizar(correo, { passwordHash: hash });
+    if (!passwordRegex.test(nuevaPassword)) {
+      return res.status(400).json({ error: "La contraseña no cumple los requisitos de seguridad: La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" });
+    }
+
+    const hash = await bcrypt.hash(nuevaPassword, 10);
+
+    const usuarioActualizado = await UsuarioService.actualizar(correo, {
+      passwordHash: hash,    
+      reset_code: null,
+      reset_expires: null
+    });
+
+    if (!usuarioActualizado) {
+      return res.status(500).json({ error: "No se pudo actualizar la contraseña" });
+    }
 
     res.json({ mensaje: "Contraseña restablecida con éxito" });
   } catch (error) {
-    res.status(400).json({ error: `Error al restablecer contraseña: ${error.message}` });
+    console.error("Error resetConCodigo:", error);
+    res.status(500).json({ error: `Error al restablecer contraseña: ${error.message}` });
   }
 };
-
-
 
 module.exports = {
   listarUsuarios,
@@ -174,6 +221,6 @@ module.exports = {
   eliminarUsuario,
   actualizarUsuario,
   loginUsuario,
-  recuperarPassword,
-  resetPassword
+  solicitarReset,
+  resetConCodigo
 };

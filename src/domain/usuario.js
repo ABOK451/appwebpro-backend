@@ -1,5 +1,5 @@
 class Usuario {
-  constructor(id, correo, password, rol, estado, nombre, app, apm, telefono) {
+  constructor(id, correo, password, rol, estado, nombre, app, apm, telefono, reset_code, reset_expires) {
     this.id = id;          
     this.correo = correo; 
     this.password = password; 
@@ -9,6 +9,8 @@ class Usuario {
     this.app = app;        
     this.apm = apm;       
     this.telefono = telefono;
+    this.reset_code = reset_code;
+    this.reset_expires = reset_expires;
   }
 }
 
