@@ -3,8 +3,15 @@ const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
 const pingRoutes = require("./interfaces/routes/pingRoutes");
 const usuarioRoutes = require('./interfaces/routes/usuarioRoutes');
+require("dotenv").config();
+
+const cors = require("cors");
 
 const app = express();
+
+app.use(cors({
+  origin: "*" 
+}));
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());

@@ -41,7 +41,7 @@ paths:
                       example: 1
                     correo:
                       type: string
-                      example: "alan@example.com"
+                      example: "usuario@gmail.com"
                     nombre:
                       type: string
                       example: "Alan"
@@ -53,13 +53,13 @@ paths:
                       example: "Cadena"
                     rol:
                       type: string
-                      example: "admin"
+                      example: "user"
                     estado:
                       type: string
                       example: "activo"
                     telefono:
                       type: string
-                      example: "5512345678"
+                      example: "+525512345678"
 
   /usuarios/nuevo:
     post:
@@ -76,7 +76,7 @@ paths:
                   example: "Nuevo Usuario"
                 correo:
                   type: string
-                  example: "nuevo@example.com"
+                  example: "nuevo@gmail.com"
                 password:
                   type: string
                   example: "123456"
@@ -96,7 +96,7 @@ paths:
                   example: "Cadena"
                 telefono:
                   type: string
-                  example: "5512345678"
+                  example: "+525512345678"
       responses:
         '201':
           description: Usuario creado exitosamente
@@ -113,7 +113,7 @@ paths:
                     example: "Nuevo Usuario"
                   correo:
                     type: string
-                    example: "nuevo@example.com"
+                    example: "nuevo@gmail.com"
                   rol:
                     type: string
                     example: "user"
@@ -128,7 +128,7 @@ paths:
                     example: "Cadena"
                   telefono:
                     type: string
-                    example: "5512345678"
+                    example: "+525512345678"
 
   /usuarios/actualizar:
     put:
@@ -139,43 +139,34 @@ paths:
           application/json:
             schema:
               type: object
-              required: [correo] # correo obligatorio para identificar al usuario
+              required: [correo]
               properties:
                 correo:
                   type: string
-                  example: "usuario@mail.com"
+                  example: "usuario@gmail.com"
                 nombre:
                   type: string
                   example: "Usuario Actualizado"
                 password:
                   type: string
-                  example: "654321"
+                  example: "Ab12345*"
                 rol:
                   type: string
                   enum: [admin, user]
-                  example: "admin"
+                  example: "user"
                 estado:
                   type: string
                   enum: [activo, inactivo, bloqueado]
-                  example: "inactivo"
+                  example: "activo"
                 app:
                   type: string
-                  example: "Martínez"
+                  example: "Martinez"
                 apm:
                   type: string
-                  example: "Ramírez"
+                  example: "Ramirez"
                 telefono:
                   type: string
-                  example: "5598765432"
-              example:
-                correo: "usuario@mail.com"
-                nombre: "Usuario Actualizado"
-                password: "654321"
-                rol: "admin"
-                estado: "inactivo"
-                app: "Martínez"
-                apm: "Ramírez"
-                telefono: "5598765432"
+                  example: "+525598765432"
       responses:
         '200':
           description: Usuario actualizado correctamente
@@ -203,12 +194,12 @@ paths:
               example:
                 id: 3
                 nombre: "Usuario Actualizado"
-                correo: "usuario@mail.com"
+                correo: "usuario@gmail.com"
                 rol: "admin"
                 estado: "inactivo"
                 app: "Martínez"
                 apm: "Ramírez"
-                telefono: "5598765432"
+                telefono: "+525598765432"
         '404':
           description: Usuario no encontrado
           content:
@@ -219,8 +210,7 @@ paths:
                   error:
                     type: string
               example:
-                error: "Usuario con correo usuario@mail.com no encontrado"
-
+                error: "Usuario con correo usuario@gmail.com no encontrado"
 
   /usuarios/eliminar:
     delete:
@@ -234,7 +224,7 @@ paths:
               properties:
                 correo:
                   type: string
-                  example: "eliminar@example.com"
+                  example: "usuario@gmail.com"
       responses:
         '200':
           description: Usuario eliminado exitosamente
@@ -251,7 +241,7 @@ paths:
                     example: "Usuario Eliminado"
                   correo:
                     type: string
-                    example: "eliminar@example.com"
+                    example: "usuario@gmail.com"
                   rol:
                     type: string
                     example: "user"
@@ -266,8 +256,7 @@ paths:
                     example: "Gómez"
                   telefono:
                     type: string
-                    example: "5511122233"
-
+                    example: "+521111122233"
 
   /usuarios/login:
     post:
@@ -284,13 +273,10 @@ paths:
               properties:
                 correo:
                   type: string
-                  example: "usuario@mail.com"
+                  example: "usuario@gmail.com"
                 password:
                   type: string
                   example: "123456"
-              example:
-                correo: "usuario@mail.com"
-                password: "123456"
       responses:
         '200':
           description: Login exitoso
@@ -317,13 +303,6 @@ paths:
                   token:
                     type: string
                     example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-              example:
-                usuario:
-                  id: 3
-                  nombre: "Usuario"
-                  correo: "usuario@mail.com"
-                  rol: "admin"
-                token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
         '400':
           description: Datos incompletos
           content:
@@ -358,65 +337,10 @@ paths:
               example:
                 error: "Usuario no encontrado"
 
-
-    /usuarios/recuperar:
+  /usuarios/solicitar-reset:
     post:
-      summary: Generar token de recuperación de contraseña
-      description: Envía el correo del usuario para generar un token temporal de recuperación
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - correo
-              properties:
-                correo:
-                  type: string
-                  example: "usuario@mail.com"
-      responses:
-        '200':
-          description: Token de recuperación generado con éxito
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  mensaje:
-                    type: string
-                  token:
-                    type: string
-              example:
-                mensaje: "Token de recuperación generado con éxito"
-                token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-        '400':
-          description: Datos incompletos
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-              example:
-                error: "El correo es requerido para recuperar contraseña"
-        '404':
-          description: Usuario no encontrado
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-              example:
-                error: "Usuario no encontrado"
-
-  /usuarios/recuperar:
-    post:
-      summary: Solicitar token para recuperación de contraseña
-      description: Envía el correo del usuario para generar un token temporal que permitirá restablecer la contraseña.
+      summary: Solicitar código para restablecer contraseña
+      description: Genera un código de verificación temporal que será enviado al correo del usuario.
       requestBody:
         required: true
         content:
@@ -429,10 +353,10 @@ paths:
                 correo:
                   type: string
                   format: email
-                  example: "usuario@mail.com"
+                  example: "usuario@gmail.com"
       responses:
         '200':
-          description: Token generado correctamente
+          description: Código generado con éxito
           content:
             application/json:
               schema:
@@ -440,12 +364,15 @@ paths:
                 properties:
                   mensaje:
                     type: string
-                    example: "Token de recuperación generado con éxito"
-                  token:
+                    example: "Código de verificación generado y enviado al correo"
+                  codigo:
                     type: string
-                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    example: "123456"
+                  expira:
+                    type: string
+                    example: "2025-09-11T20:10:00.000Z"
         '400':
-          description: Falta el correo en la solicitud
+          description: El correo es requerido
           content:
             application/json:
               schema:
@@ -464,21 +391,11 @@ paths:
                   error:
                     type: string
                     example: "Usuario no encontrado"
-        '500':
-          description: Error interno del servidor
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-                    example: "Error al generar token de recuperación: ..."
-  
-  /usuarios/reset:
+
+  /usuarios/reset-con-codigo:
     post:
-      summary: Restablecer contraseña usando token
-      description: Se requiere token válido, correo y nueva contraseña
+      summary: Restablecer contraseña con código
+      description: Valida el código y actualiza la contraseña del usuario.
       requestBody:
         required: true
         content:
@@ -486,19 +403,19 @@ paths:
             schema:
               type: object
               required:
-                - token
                 - correo
+                - codigo
                 - nuevaPassword
               properties:
-                token:
-                  type: string
-                  example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                 correo:
                   type: string
-                  example: "correo@gmail.com"
+                  example: "usuario@mail.com"
+                codigo:
+                  type: string
+                  example: "123456"
                 nuevaPassword:
                   type: string
-                  example: "Ab12345*"
+                  example: "NuevaPass*123"
       responses:
         '200':
           description: Contraseña restablecida con éxito
@@ -509,10 +426,9 @@ paths:
                 properties:
                   mensaje:
                     type: string
-                example:
-                  mensaje: "Contraseña restablecida con éxito"
+                    example: "Contraseña restablecida con éxito"
         '400':
-          description: Datos incompletos, token inválido o contraseña no cumple requisitos
+          description: Código inválido o contraseña no cumple requisitos
           content:
             application/json:
               schema:
@@ -521,26 +437,12 @@ paths:
                   error:
                     type: string
               examples:
-                incompleto:
+                codigoInvalido:
                   value:
-                    error: "Token, correo y nueva contraseña son requeridos"
-                invalido:
-                  value:
-                    error: "Error al restablecer contraseña: jwt expired"
+                    error: "Código inválido o expirado"
                 passwordInvalida:
                   value:
-                    error: "La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial"
-        '401':
-          description: Token no coincide con correo
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-              example:
-                error: "El token no coincide con el correo proporcionado"
+                    error: "La nueva contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial"
         '404':
           description: Usuario no encontrado
           content:
@@ -550,5 +452,4 @@ paths:
                 properties:
                   error:
                     type: string
-              example:
-                error: "Usuario no encontrado"
+                    example: "Usuario no encontrado"
