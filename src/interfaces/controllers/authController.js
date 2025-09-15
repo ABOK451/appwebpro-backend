@@ -1,65 +1,64 @@
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-const speakeasy = require("speakeasy");
-const transporter = require("../../infrastructure/mailer"); 
-const pool = require("../../infrastructure/db/pool"); 
+const UsuarioService = require('../../application/usuarioService');
+const bcrypt = require('bcrypt'); 
+const jwt = require('jsonwebtoken');
 
-// LOGIN: valida credenciales y envía OTP
-const login = async (req, res) => {
+const { loginAttempt, isBlocked } = require("../middlewares/loginAttempts");
+
+
+const loginUsuario = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { correo, password } = req.body;
+    if (!correo || !password) 
+      return res.status(400).json({ error: "Correo y contraseña son requeridos" });
 
     // Buscar usuario
-    const result = await pool.query("SELECT * FROM usuarios WHERE email = $1", [email]);
-    const usuario = result.rows[0];
-    if (!usuario) return res.status(401).json({ error: "Credenciales inválidas" });
+    const usuario = await UsuarioService.buscarPorCorreo(correo);
+    if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
 
-    // Validar password
-    const valid = await bcrypt.compare(password, usuario.password);
-    if (!valid) return res.status(401).json({ error: "Credenciales inválidas" });
+    // Verificar bloqueo usando middleware
+    if (await isBlocked(usuario.id)) {
+      return res.status(403).json({ error: `Cuenta bloqueada hasta ${usuario.blocked_until}` });
+    }
 
-    // Generar OTP (válido por 5 min)
-    const otp = speakeasy.totp({
-      secret: process.env.OTP_SECRET || "secretkey",
-      encoding: "base32",
-      step: 300
+    const passwordCorrecto = await bcrypt.compare(password, usuario.password);
+    if (!passwordCorrecto) {
+      await loginAttempt(usuario); // Incrementa intentos y bloquea si es necesario
+      return res.status(401).json({ error: "Contraseña incorrecta" });
+    }
+
+    await UsuarioService.actualizarLogin(usuario.id, { failed_attempts: 0, blocked_until: null });
+
+
+    const token = jwt.sign(
+      { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    // Respuesta exitosa
+    res.json({ 
+      mensaje: "Inicio de sesión exitoso", 
+      usuario: {
+        id: usuario.id,
+        correo: usuario.correo,
+        rol: usuario.rol,
+        nombre: usuario.nombre,
+        app: usuario.app,
+        apm: usuario.apm,
+        telefono: usuario.telefono,
+        estado: usuario.estado
+      },
+      token
     });
 
-    // Enviar OTP por correo
-    await transporter.sendMail({
-      from: "noreply@miapp.com",
-      to: usuario.email,
-      subject: "Tu código de acceso",
-      text: `Tu código OTP es: ${otp}`
-    });
-
-    res.json({ message: "OTP enviado al correo registrado" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: `Error al iniciar sesión: ${error.message}` });
   }
 };
 
-// VERIFICAR OTP
-const verifyOtp = async (req, res) => {
-  try {
-    const { email, otp } = req.body;
 
-    const verified = speakeasy.totp.verify({
-      secret: process.env.OTP_SECRET || "secretkey",
-      encoding: "base32",
-      token: otp,
-      step: 300
-    });
 
-    if (!verified) return res.status(401).json({ error: "OTP inválido o expirado" });
 
-    // Crear JWT de sesión
-    const token = jwt.sign({ email }, process.env.JWT_SECRET || "jwtsecret", { expiresIn: "1h" });
-
-    res.json({ message: "Login exitoso", token });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+module.exports = {
+  loginUsuario
 };
-
-module.exports = { login, verifyOtp };
