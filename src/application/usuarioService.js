@@ -60,10 +60,21 @@ class UsuarioService {
 
 
   static async actualizar(correoBuscado, { 
-    correo, password, rol, estado, nombre, app, apm, telefono, passwordHash,
-    reset_code, reset_expires
+    correo, password, rol, estado, nombre, app, apm, telefono, passwordHash
   }) {
-    const hashFinal = passwordHash || (password ? await bcrypt.hash(password, 10) : null);
+    let hashFinal = null;
+      if (passwordHash) {
+        // Se pasó directamente un hash (p. ej. desde reset), lo usamos tal cual
+        hashFinal = passwordHash;
+      } else if (password) {
+        // Si el valor pasado en `password` ya parece un hash bcrypt, no lo vuelvas a hashear.
+        if (/^\$2[aby]\$/.test(password)) {
+          hashFinal = password;
+        } else {
+          hashFinal = await bcrypt.hash(password, 10);
+        }
+      }
+
 
     const res = await pool.query(
       `UPDATE usuarios
@@ -75,19 +86,26 @@ class UsuarioService {
          nombre = COALESCE($5, nombre),
          app = COALESCE($6, app),
          apm = COALESCE($7, apm),
-         telefono = COALESCE($8, telefono),
-         reset_code = $9,
-         reset_expires = $10
-       WHERE correo = $11
-       RETURNING id, correo, rol, estado, nombre, app, apm, telefono, reset_code, reset_expires`,
-      [correo, hashFinal, rol, estado, nombre, app, apm, telefono, reset_code, reset_expires, correoBuscado]
+         telefono = COALESCE($8, telefono)
+       WHERE correo = $9
+       RETURNING id, correo, rol, estado, nombre, app, apm, telefono`,
+      [correo, hashFinal, rol, estado, nombre, app, apm, telefono, correoBuscado]
     );
 
     if (res.rows.length === 0) return null;
     const u = res.rows[0];
     return new Usuario(
-      u.id, u.correo, hashFinal || u.password, u.rol, u.estado, 
-      u.nombre, u.app, u.apm, u.telefono, u.reset_code, u.reset_expires
+      u.id, u.correo, hashFinal || u.password, u.rol, u.estado,
+      u.nombre, u.app, u.apm, u.telefono
+    );
+  }
+
+  static async actualizarPassword(usuario_id, passwordHash) {
+    await pool.query(
+      `UPDATE usuarios 
+       SET password=$1 
+       WHERE id=$2`,
+      [passwordHash, usuario_id]
     );
   }
 
