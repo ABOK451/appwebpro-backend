@@ -1,4 +1,4 @@
-require('dotenv').config(); // Asegúrate de que esté al inicio
+require('dotenv').config(); 
 
 const { Pool } = require('pg');
 
@@ -7,10 +7,9 @@ const pool = new Pool({
   host: process.env.DB_HOST,
   database: process.env.DB_NAME,
   password: process.env.DB_PASSWORD,
-  port: Number(process.env.DB_PORT) || 5433 // fuerza a número
+  port: Number(process.env.DB_PORT) || 5433 
 });
 
-// Opcional: log para depuración
 console.log('Conectando a PostgreSQL en:', process.env.DB_HOST, Number(process.env.DB_PORT));
 
 module.exports = pool;

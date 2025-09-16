@@ -2,7 +2,9 @@ const UsuarioService = require('../../application/usuarioService');
 const RecuperarService = require('../../application/recuperarService'); 
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const transporter = require('../../config/email'); // si usas correo
+const transporter = require('../../config/email');
+const { loginAttempt, isBlocked } = require("../middlewares/loginAttempts");
+ 
 
 
 const loginUsuario = async (req, res) => {
@@ -13,19 +15,22 @@ const loginUsuario = async (req, res) => {
 
     const usuario = await UsuarioService.buscarPorCorreo(correo);
     if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
-    console.log("Password en DB:", usuario.password);
-    console.log("Password recibido:", password);
-
+   
+    if (await isBlocked(usuario.id)) {
+      return res.status(403).json({ error: `Cuenta bloqueada hasta ${usuario.blocked_until}` });
+    }
+	
     const passwordCorrecto = await bcrypt.compare(password, usuario.password);
-    
-
     if (!passwordCorrecto) {
+      await loginAttempt(usuario); 
       return res.status(401).json({ error: "Contraseña incorrecta" });
     }
-
+	
+    await UsuarioService.actualizarLogin(usuario.id, { failed_attempts: 0, blocked_until: null }); 
+		
     
     const codigo = Math.floor(100000 + Math.random() * 900000).toString();
-    const expira = new Date(Date.now() + 5 * 60000); // 5 minutos válido
+    const expira = new Date(Date.now() + 5 * 60000); 
 
     
     await RecuperarService.guardarCodigoReset(usuario.id, codigo, expira);

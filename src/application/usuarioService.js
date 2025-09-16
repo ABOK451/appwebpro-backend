@@ -14,7 +14,6 @@ class UsuarioService {
   try {
     const hash = await bcrypt.hash(password, 10);
 
-    // Insertar en usuarios
     const res = await pool.query(
       `INSERT INTO usuarios (correo, password, rol, estado, nombre, app, apm, telefono)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -24,7 +23,6 @@ class UsuarioService {
 
     const u = res.rows[0];
 
-    // Crear registro en usuario_login
     await pool.query(
       `INSERT INTO usuario_login (usuario_id, failed_attempts, blocked_until) VALUES ($1, 0, NULL)`,
       [u.id]
@@ -35,7 +33,6 @@ class UsuarioService {
   } catch (error) {
     console.error("Error en UsuarioService.crear:", error);
 
-    // Captura clave duplicada
     if (error.code === '23505' && error.detail && error.detail.includes('correo')) {
       throw new Error('El correo ya existe, no se puede repetir');
     }
@@ -64,10 +61,8 @@ class UsuarioService {
   }) {
     let hashFinal = null;
       if (passwordHash) {
-        // Se pasó directamente un hash (p. ej. desde reset), lo usamos tal cual
         hashFinal = passwordHash;
       } else if (password) {
-        // Si el valor pasado en `password` ya parece un hash bcrypt, no lo vuelvas a hashear.
         if (/^\$2[aby]\$/.test(password)) {
           hashFinal = password;
         } else {
