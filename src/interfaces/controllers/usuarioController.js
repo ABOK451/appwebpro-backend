@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 
 
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
-const nombreRegex = /^[A-Za-z]+$/;
+const nombreRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]+$/;
 
 const listarUsuarios = async (req, res) => {
   try {
@@ -31,13 +31,13 @@ const crearUsuario = async (req, res) => {
       return res.status(400).json({ error: "La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" });
     }
     if (!nombreRegex.test(nombre)) {
-      return res.status(400).json({ error: "El nombre no debe contener números ni caracteres especiales" });
+      return res.status(400).json({ error: "El nombre solo puede contener letras (con acentos permitidos) y espacios, sin números ni caracteres especiales" });
     }
     if (app && !nombreRegex.test(app)) {
-      return res.status(400).json({ error: "El apellido paterno no debe contener números ni caracteres especiales" });
+      return res.status(400).json({ error: "El apellido paterno solo puede contener letras (con acentos permitidos), sin números ni caracteres especiales" });
     }
     if (apm && !nombreRegex.test(apm)) {
-      return res.status(400).json({ error: "El apellido materno no debe contener números ni caracteres especiales" });
+      return res.status(400).json({ error: "El apellido materno solo puede contener letras (con acentos permitidos), sin números ni caracteres especiales" });
     }
 
     // 🔹 Aquí se llama al servicio para crear el usuario
