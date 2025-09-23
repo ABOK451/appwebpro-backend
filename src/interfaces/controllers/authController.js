@@ -1,65 +1,99 @@
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-const speakeasy = require("speakeasy");
-const transporter = require("../../infrastructure/mailer"); 
-const pool = require("../../infrastructure/db/pool"); 
+const UsuarioService = require('../../application/usuarioService');
+const RecuperarService = require('../../application/recuperarService'); 
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const transporter = require('../../config/email');
+const { loginAttempt, isBlocked } = require("../middlewares/loginAttempts");
+ 
 
-// LOGIN: valida credenciales y envía OTP
-const login = async (req, res) => {
+
+const loginUsuario = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { correo, password } = req.body;
+    if (!correo || !password) 
+      return res.status(400).json({ error: "Correo y contraseña son requeridos" });
 
-    // Buscar usuario
-    const result = await pool.query("SELECT * FROM usuarios WHERE email = $1", [email]);
-    const usuario = result.rows[0];
-    if (!usuario) return res.status(401).json({ error: "Credenciales inválidas" });
+    const usuario = await UsuarioService.buscarPorCorreo(correo);
+    if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
+   
+    if (await isBlocked(usuario.id)) {
+      return res.status(403).json({ error: `Cuenta bloqueada hasta ${usuario.blocked_until}` });
+    }
+	
+    const passwordCorrecto = await bcrypt.compare(password, usuario.password);
+    if (!passwordCorrecto) {
+      await loginAttempt(usuario); 
+      return res.status(401).json({ error: "Contraseña incorrecta" });
+    }
+	
+    await UsuarioService.actualizarLogin(usuario.id, { failed_attempts: 0, blocked_until: null }); 
+		
+    
+    const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+    const expira = new Date(Date.now() + 5 * 60000); 
 
-    // Validar password
-    const valid = await bcrypt.compare(password, usuario.password);
-    if (!valid) return res.status(401).json({ error: "Credenciales inválidas" });
+    
+    await RecuperarService.guardarCodigoReset(usuario.id, codigo, expira);
 
-    // Generar OTP (válido por 5 min)
-    const otp = speakeasy.totp({
-      secret: process.env.OTP_SECRET || "secretkey",
-      encoding: "base32",
-      step: 300
-    });
-
-    // Enviar OTP por correo
+    
     await transporter.sendMail({
-      from: "noreply@miapp.com",
-      to: usuario.email,
-      subject: "Tu código de acceso",
-      text: `Tu código OTP es: ${otp}`
+      from: `"Soporte App" <${process.env.EMAIL_USER}>`,
+      to: correo,
+      subject: "Código de verificación 2FA",
+      text: `Tu código de autenticación es: ${codigo}. Válido por 5 minutos.`,
+      html: `<p>Hola ${usuario.nombre},</p>
+             <p>Tu código de autenticación es: <b>${codigo}</b></p>
+             <p>Válido por 5 minutos.</p>`
     });
 
-    res.json({ message: "OTP enviado al correo registrado" });
+    
+    res.json({ mensaje: "Código de verificación enviado" });
+
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: `Error al iniciar sesión: ${error.message}` });
   }
 };
 
-// VERIFICAR OTP
-const verifyOtp = async (req, res) => {
+
+const verificarCodigo = async (req, res) => {
   try {
-    const { email, otp } = req.body;
+    const { correo, codigo } = req.body;
+    if (!correo || !codigo) 
+      return res.status(400).json({ error: "Correo y código son requeridos" });
 
-    const verified = speakeasy.totp.verify({
-      secret: process.env.OTP_SECRET || "secretkey",
-      encoding: "base32",
-      token: otp,
-      step: 300
+    const usuario = await UsuarioService.buscarPorCorreo(correo);
+    if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    const valido = await RecuperarService.validarCodigoReset(usuario.id, codigo);
+    if (!valido) return res.status(400).json({ error: "Código inválido o expirado" });
+
+    
+    await RecuperarService.limpiarCodigoReset(usuario.id);
+
+    
+    const token = jwt.sign(
+      { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    res.json({
+      mensaje: "Autenticación exitosa",
+      token,
+      usuario: {
+        id: usuario.id,
+        correo: usuario.correo,
+        rol: usuario.rol,
+        nombre: usuario.nombre
+      }
     });
 
-    if (!verified) return res.status(401).json({ error: "OTP inválido o expirado" });
-
-    // Crear JWT de sesión
-    const token = jwt.sign({ email }, process.env.JWT_SECRET || "jwtsecret", { expiresIn: "1h" });
-
-    res.json({ message: "Login exitoso", token });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: `Error al verificar código: ${error.message}` });
   }
 };
 
-module.exports = { login, verifyOtp };
+module.exports = {
+  loginUsuario,
+  verificarCodigo
+};

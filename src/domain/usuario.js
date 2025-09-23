@@ -9,8 +9,6 @@ class Usuario {
     this.app = app;        
     this.apm = apm;       
     this.telefono = telefono;
-    this.reset_code = reset_code;
-    this.reset_expires = reset_expires;
   }
 }
 
