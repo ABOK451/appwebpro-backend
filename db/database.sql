@@ -20,3 +20,12 @@ CREATE TABLE usuario_login (
     ultimo_login TIMESTAMP
 );
 
+ALTER TABLE usuario_login
+ADD COLUMN latitud DECIMAL(9,6),
+ADD COLUMN longitud DECIMAL(9,6);
+
+ALTER TABLE usuario_login
+ADD COLUMN token VARCHAR(500),
+ADD COLUMN token_expires TIMESTAMP;
+
+

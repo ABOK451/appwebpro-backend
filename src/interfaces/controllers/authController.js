@@ -1,5 +1,7 @@
 const UsuarioService = require('../../application/usuarioService');
 const RecuperarService = require('../../application/recuperarService');
+const AuthService = require('../../application/authService');
+const { obtenerUbicacionGoogle } = require('../../infrastructure/utils/geolocation');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const transporter = require('../../config/email');
@@ -20,6 +22,7 @@ const loginUsuario = async (req, res) => {
   try {
     const { correo, password } = req.body;
     const errores = [];
+    
 
     if (!correo) errores.push({ codigo: "FALTA_CORREO", mensaje: "Correo es requerido" });
     if (!password) errores.push({ codigo: "FALTA_PASSWORD", mensaje: "Contraseña es requerida" });
@@ -50,6 +53,11 @@ const loginUsuario = async (req, res) => {
     }
 
     await UsuarioService.actualizarLogin(usuario.id, { failed_attempts: 0, blocked_until: null });
+
+    const { lat, lng } = await obtenerUbicacionGoogle();
+
+
+    await AuthService.guardarUbicacion(usuario.id, lat, lng);
 
     const codigo = Math.floor(100000 + Math.random() * 900000).toString();
     const expira = new Date(Date.now() + 5 * 60000);
@@ -96,12 +104,16 @@ const verificarCodigo = async (req, res) => {
     if (!valido) return res.status(200).json(errorResponse("CODIGO_INVALIDO", "Código inválido o expirado", null, 2));
 
     await RecuperarService.limpiarCodigoReset(usuario.id);
+    
 
     const token = jwt.sign(
-      { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
+  { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
+  process.env.JWT_SECRET,
+  { expiresIn: '5m' } // 5 minutos
+);
+
+    const expiracionToken = new Date(Date.now() + 5 * 60000); // 5 minutos
+      await UsuarioService.guardarToken(usuario.id, token, expiracionToken);
 
     res.json({
       mensaje: "Autenticación exitosa",

@@ -143,6 +143,38 @@ class UsuarioService {
   };
 }
 
+static async guardarToken(usuario_id, token, expiracion = null) {
+    const res = await pool.query(
+      `UPDATE usuario_login
+       SET token = $1,
+           token_expires = $2
+       WHERE usuario_id = $3
+       RETURNING usuario_id, token, token_expires`,
+      [token, expiracion, usuario_id]
+    );
+
+    if (res.rows.length === 0) return null;
+    return res.rows[0];
+  }
+
+  static async obtenerTokenActivo(correo) {
+  const res = await pool.query(
+    `SELECT ul.token, ul.token_expires
+     FROM usuarios u
+     JOIN usuario_login ul ON ul.usuario_id = u.id
+     WHERE u.correo = $1`,
+    [correo]
+  );
+  if (res.rows.length === 0) return null;
+  const row = res.rows[0];
+
+  // Verifica que el token no haya expirado
+  if (!row.token) return null;
+  if (row.token_expires && new Date(row.token_expires) < new Date()) return null;
+
+  return row.token;
+}
+
 
 
 

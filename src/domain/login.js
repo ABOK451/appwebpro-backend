@@ -6,7 +6,9 @@ class UsuarioLogin {
     this.reset_expires = reset_expires;
     this.failed_attempts = failed_attempts || 0; 
     this.blocked_until = blocked_until;        
-    this.ultimo_login = ultimo_login;          
+    this.ultimo_login = ultimo_login;  
+    this.latitud = latitud;           
+    this.longitud = longitud;        
   }
 }
 
