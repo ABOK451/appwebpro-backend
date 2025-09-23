@@ -1,7 +1,7 @@
 const UsuarioService = require('../../application/usuarioService');
 const RecuperarService = require('../../application/recuperarService');
 const AuthService = require('../../application/authService');
-const { obtenerUbicacionGoogle } = require('../../infrastructure/utils/geolocation');
+const { obtenerUbicacionIP } = require('../../infrastructure/utils/geolocation');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const transporter = require('../../config/email');
@@ -54,10 +54,15 @@ const loginUsuario = async (req, res) => {
 
     await UsuarioService.actualizarLogin(usuario.id, { failed_attempts: 0, blocked_until: null });
 
-    const { lat, lng } = await obtenerUbicacionGoogle();
+    const ipParaPrueba = req.ip === "::1" ? "8.8.8.8" : req.ip;
+    const ubicacion = await obtenerUbicacionIP(ipParaPrueba);
 
+    if (ubicacion && ubicacion.lat && ubicacion.lng) {
+      await AuthService.guardarUbicacion(usuario.id, ubicacion.lat, ubicacion.lng);
+    } else {
+      console.warn("No se pudo obtener ubicación para el usuario:", usuario.correo);
+    }
 
-    await AuthService.guardarUbicacion(usuario.id, lat, lng);
 
     const codigo = Math.floor(100000 + Math.random() * 900000).toString();
     const expira = new Date(Date.now() + 5 * 60000);

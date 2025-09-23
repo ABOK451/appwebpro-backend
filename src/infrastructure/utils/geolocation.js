@@ -1,27 +1,22 @@
-const fetch = require('node-fetch');
-
-async function obtenerUbicacionGoogle() {
+const obtenerUbicacionIP = async (ip) => {
   try {
-    const res = await fetch(
-      `https://www.googleapis.com/geolocation/v1/geolocate?key=${process.env.GOOGLE_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ considerIp: true }) 
-      }
-    );
+    const token = process.env.IPINFO_TOKEN; 
+    const url = `https://ipinfo.io/${ip}/json?token=${token}`;
 
+    const res = await fetch(url);
     const data = await res.json();
 
-    return {
-      lat: data.location?.lat || null,
-      lng: data.location?.lng || null,
-      accuracy: data.accuracy || null
-    };
-  } catch (error) {
-    console.error("Error al obtener geolocalización:", error);
-    return { lat: null, lng: null };
+    if (data.loc) {
+      const [lat, lng] = data.loc.split(",");
+      return { lat, lng };
+    } else {
+      console.warn("No se pudo obtener ubicación de ipinfo:", data);
+      return null;
+    }
+  } catch (err) {
+    console.error("Error al obtener ubicación por IP:", err);
+    return null;
   }
-}
+};
 
-module.exports = { obtenerUbicacionGoogle };
+module.exports = { obtenerUbicacionIP };
