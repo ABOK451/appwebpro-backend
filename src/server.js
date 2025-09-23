@@ -11,10 +11,28 @@ const usuarioRoutes = require("./interfaces/routes/usuarioRoutes");
 const recuperarRoutes = require("./interfaces/routes/recuperarRoutes");
 const loginRoutes = require("./interfaces/routes/loginRoutes");
 const rolesRoutes = require("./interfaces/routes/rolesRoutes");
-
+const errorResponse = require('./helpers/errorResponse'); 
 require("dotenv").config();
 
 const app = express();
+
+app.use(express.json({
+  verify: (req, res, buf, encoding) => {
+    try {
+      JSON.parse(buf);
+    } catch (e) {
+      res.status(200).json(errorResponse(
+        "JSON_INVALIDO",
+        "El cuerpo de la petición no es un JSON válido",
+        e.message,
+        1
+      ));
+      throw new Error("JSON inválido"); 
+    }
+  }
+}));
+
+
 
 app.use(cors({
   origin: "*", 
