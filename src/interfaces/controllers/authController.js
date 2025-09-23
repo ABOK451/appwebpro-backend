@@ -1,76 +1,102 @@
 const UsuarioService = require('../../application/usuarioService');
-const RecuperarService = require('../../application/recuperarService'); 
+const RecuperarService = require('../../application/recuperarService');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const transporter = require('../../config/email');
 const { loginAttempt, isBlocked } = require("../middlewares/loginAttempts");
- 
+const errorResponse = require('../../helpers/errorResponse');
+const dns = require('dns');
 
+const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+
+const hayInternet = () => {
+  return new Promise((resolve) => {
+    dns.lookup('google.com', (err) => resolve(!err));
+  });
+};
 
 const loginUsuario = async (req, res) => {
   try {
     const { correo, password } = req.body;
-    if (!correo || !password) 
-      return res.status(400).json({ error: "Correo y contraseña son requeridos" });
+    const errores = [];
+
+    if (!correo) errores.push({ codigo: "FALTA_CORREO", mensaje: "Correo es requerido" });
+    if (!password) errores.push({ codigo: "FALTA_PASSWORD", mensaje: "Contraseña es requerida" });
+
+    if (correo && typeof correo !== 'string') errores.push({ codigo: "TIPO_INVALIDO_CORREO", mensaje: "Correo debe ser texto" });
+    if (password && typeof password !== 'string') errores.push({ codigo: "TIPO_INVALIDO_PASSWORD", mensaje: "Contraseña debe ser texto" });
+
+    if (correo && correo.trim() === "") errores.push({ codigo: "VACIO_CORREO", mensaje: "Correo no puede estar vacío" });
+    if (password && password.trim() === "") errores.push({ codigo: "VACIO_PASSWORD", mensaje: "Contraseña no puede estar vacía" });
+
+    // Validaciones de formato
+    if (correo && !correoRegex.test(correo)) errores.push({ codigo: "CORREO_INVALIDO", mensaje: "El correo debe tener un formato válido, ejemplo: usuario@dominio.com" });
+    if (password && !passwordRegex.test(password)) errores.push({ codigo: "PASSWORD_INVALIDA", mensaje: "La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" });
+
+    if (errores.length > 0) return res.status(200).json(errorResponse("ERRORES_VALIDACION", "Errores de validación", errores, 2));
 
     const usuario = await UsuarioService.buscarPorCorreo(correo);
-    if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
-   
+    if (!usuario) return res.status(200).json(errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3));
+
     if (await isBlocked(usuario.id)) {
-      return res.status(403).json({ error: `Cuenta bloqueada hasta ${usuario.blocked_until}` });
+      return res.status(200).json(errorResponse("CUENTA_BLOQUEADA", `Cuenta bloqueada hasta ${usuario.blocked_until}`, null, 3));
     }
-	
+
     const passwordCorrecto = await bcrypt.compare(password, usuario.password);
     if (!passwordCorrecto) {
-      await loginAttempt(usuario); 
-      return res.status(401).json({ error: "Contraseña incorrecta" });
+      await loginAttempt(usuario);
+      return res.status(200).json(errorResponse("CONTRASENA_INCORRECTA", "Contraseña incorrecta", null, 2));
     }
-	
-    await UsuarioService.actualizarLogin(usuario.id, { failed_attempts: 0, blocked_until: null }); 
-		
-    
-    const codigo = Math.floor(100000 + Math.random() * 900000).toString();
-    const expira = new Date(Date.now() + 5 * 60000); 
 
-    
+    await UsuarioService.actualizarLogin(usuario.id, { failed_attempts: 0, blocked_until: null });
+
+    const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+    const expira = new Date(Date.now() + 5 * 60000);
     await RecuperarService.guardarCodigoReset(usuario.id, codigo, expira);
 
-    
-    await transporter.sendMail({
-      from: `"Soporte App" <${process.env.EMAIL_USER}>`,
-      to: correo,
-      subject: "Código de verificación 2FA",
-      text: `Tu código de autenticación es: ${codigo}. Válido por 5 minutos.`,
-      html: `<p>Hola ${usuario.nombre},</p>
-             <p>Tu código de autenticación es: <b>${codigo}</b></p>
-             <p>Válido por 5 minutos.</p>`
-    });
+    const internet = await hayInternet();
 
-    
-    res.json({ mensaje: "Código de verificación enviado" });
+    if (internet) {
+      await transporter.sendMail({
+        from: `"Soporte App" <${process.env.EMAIL_USER}>`,
+        to: correo,
+        subject: "Código de verificación 2FA",
+        text: `Tu código de autenticación es: ${codigo}. Válido por 5 minutos.`,
+        html: `<p>Hola ${usuario.nombre},</p>
+               <p>Tu código de autenticación es: <b>${codigo}</b></p>
+               <p>Válido por 5 minutos.</p>`
+      });
+      return res.json({ mensaje: "Código de verificación enviado", codigo: 0 });
+    } else {
+      console.log(`[OFFLINE MODE] Código OTP para ${correo}: ${codigo}`);
+      return res.json({
+        mensaje: "Código de verificación generado en modo offline",
+        otp: codigo,
+        codigo: 0
+      });
+    }
 
   } catch (error) {
-    res.status(500).json({ error: `Error al iniciar sesión: ${error.message}` });
+    console.error(error);
+    return res.status(200).json(errorResponse("ERROR_SERVIDOR", "Error al iniciar sesión", error.message, 3));
   }
 };
-
 
 const verificarCodigo = async (req, res) => {
   try {
     const { correo, codigo } = req.body;
-    if (!correo || !codigo) 
-      return res.status(400).json({ error: "Correo y código son requeridos" });
+    if (!correo || !codigo)
+      return res.status(200).json(errorResponse("FALTAN_DATOS", "Correo y código son requeridos", null, 2));
 
     const usuario = await UsuarioService.buscarPorCorreo(correo);
-    if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
+    if (!usuario) return res.status(200).json(errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3));
 
     const valido = await RecuperarService.validarCodigoReset(usuario.id, codigo);
-    if (!valido) return res.status(400).json({ error: "Código inválido o expirado" });
+    if (!valido) return res.status(200).json(errorResponse("CODIGO_INVALIDO", "Código inválido o expirado", null, 2));
 
-    
     await RecuperarService.limpiarCodigoReset(usuario.id);
 
-    
     const token = jwt.sign(
       { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
       process.env.JWT_SECRET,
@@ -85,11 +111,12 @@ const verificarCodigo = async (req, res) => {
         correo: usuario.correo,
         rol: usuario.rol,
         nombre: usuario.nombre
-      }
+      },
+      codigo: 0
     });
 
   } catch (error) {
-    res.status(500).json({ error: `Error al verificar código: ${error.message}` });
+    res.status(200).json(errorResponse("ERROR_SERVIDOR", `Error al verificar código: ${error.message}`, null, 3));
   }
 };
 
