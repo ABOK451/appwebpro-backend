@@ -20,14 +20,20 @@ const verificarToken = (rolesPermitidos = []) => {
 
       const ahora = Math.floor(Date.now() / 1000);
       const tiempoRestante = payload.exp - ahora;
-      const extension = 3 * 60; 
+      const extension = 3 * 60; // 3 minutos
 
+      // Extender token si le quedan 5 minutos o menos
       if (tiempoRestante <= 5 * 60) { 
         const nuevoToken = jwt.sign(
           { id: payload.id, correo: payload.correo, rol: payload.rol },
           process.env.JWT_SECRET,
           { expiresIn: `${tiempoRestante + extension}s` }
         );
+
+        // Actualizar token en DB
+        const nuevaExpiracion = new Date(Date.now() + (tiempoRestante + extension) * 1000);
+        UsuarioService.guardarToken(payload.id, nuevoToken, nuevaExpiracion);
+
         res.setHeader('x-refresh-token', nuevoToken);
       }
 
