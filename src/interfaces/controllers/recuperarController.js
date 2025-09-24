@@ -1,6 +1,7 @@
 const UsuarioService = require('../../application/usuarioService');
 const RecuperarService = require('../../application/recuperarService');
 const bcrypt = require('bcrypt'); 
+const dns = require('dns');
 const transporter = require('../../config/email');
 const errorResponse = require('../../helpers/errorResponse');
 
@@ -17,6 +18,7 @@ const solicitarReset = async (req, res) => {
   try {
     const { correo } = req.body;
     const errores = [];
+
 
     if (!correo) errores.push({ codigo: "FALTA_CORREO", mensaje: "El correo es requerido" });
     else if (!correoRegex.test(correo)) errores.push({ codigo: "CORREO_INVALIDO", mensaje: "El correo no tiene un formato válido" });
@@ -70,36 +72,66 @@ const solicitarReset = async (req, res) => {
 const resetConCodigo = async (req, res) => {
   try {
     const { correo, codigo, nuevaPassword } = req.body;
+        const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+
+
+    if (!correo) {
+      return res.status(200).json(
+        errorResponse("FALTA_CORREO", "El correo es requerido", null, 2)
+      );
+    }
+
+    if (!correoRegex.test(correo)) {
+      return res.status(200).json(
+        errorResponse("CORREO_INVALIDO", "El correo no tiene un formato válido", null, 2)
+      );
+    }
+
+    
+
+
     const errores = [];
+    if (!codigo) {
+      errores.push({ codigo: "FALTA_CODIGO", mensaje: "El código es requerido" });
+    }
 
-    if (!correo) errores.push({ codigo: "FALTA_CORREO", mensaje: "El correo es requerido" });
-    else if (!correoRegex.test(correo)) errores.push({ codigo: "CORREO_INVALIDO", mensaje: "El correo no tiene un formato válido" });
+    if (!nuevaPassword) {
+      errores.push({ codigo: "FALTA_PASSWORD", mensaje: "La nueva contraseña es requerida" });
+    } else if (!passwordRegex.test(nuevaPassword)) {
+      errores.push({ 
+        codigo: "PASSWORD_INVALIDA", 
+        mensaje: "La contraseña no cumple los requisitos: mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" 
+      });
+    }
 
-    if (!codigo) errores.push({ codigo: "FALTA_CODIGO", mensaje: "El código es requerido" });
-    if (!nuevaPassword) errores.push({ codigo: "FALTA_PASSWORD", mensaje: "La nueva contraseña es requerida" });
-    else if (!passwordRegex.test(nuevaPassword)) errores.push({ 
-      codigo: "PASSWORD_INVALIDA", 
-      mensaje: "La contraseña no cumple los requisitos: mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" 
-    });
-
-    if (errores.length > 0) return res.status(200).json(errorResponse("ERRORES_VALIDACION", "Errores de validación", errores, 2));
+    if (errores.length > 0) {
+      return res.status(200).json(errorResponse("ERRORES_VALIDACION", "Errores de validación", errores, 2));
+    }
 
     const usuario = await UsuarioService.buscarPorCorreo(correo);
-    if (!usuario) return res.status(200).json(errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3));
+    if (!usuario) {
+      return res.status(200).json(errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3));
+    }
 
     const valido = await RecuperarService.validarCodigoReset(usuario.id, codigo);
-    if (!valido) return res.status(200).json(errorResponse("CODIGO_INVALIDO", "Código inválido o expirado", null, 2));
+    if (!valido) {
+      return res.status(200).json(errorResponse("CODIGO_INVALIDO", "Código inválido o expirado", null, 2));
+    }
 
     const hash = await bcrypt.hash(nuevaPassword, 10);
     await UsuarioService.actualizar(usuario.correo, { passwordHash: hash });
     await RecuperarService.limpiarCodigoReset(usuario.id);
 
-    res.json({ mensaje: "Contraseña restablecida con éxito", codigo: 0 });
+    return res.json({ mensaje: "Contraseña restablecida con éxito", codigo: 0 });
+
   } catch (error) {
     console.error("Error resetConCodigo:", error);
-    res.status(200).json(errorResponse("ERROR_SERVIDOR", "Error al restablecer contraseña", error.message, 3));
+    return res.status(200).json(errorResponse("ERROR_SERVIDOR", "Error al restablecer contraseña", error.message, 3));
   }
 };
+
+
 
 module.exports = {
   solicitarReset,
