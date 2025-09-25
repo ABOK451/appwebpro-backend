@@ -11,6 +11,7 @@ const dns = require('dns');
 
 const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+const codigoRegex = /^\d+$/;
 
 const hayInternet = () => {
   return new Promise((resolve) => {
@@ -22,6 +23,7 @@ const loginUsuario = async (req, res) => {
   try {
     const { correo, password } = req.body;
     const errores = [];
+    
 
     if (!correo) errores.push({ codigo: "FALTA_CORREO", mensaje: "Correo es requerido" });
     if (!password) errores.push({ codigo: "FALTA_PASSWORD", mensaje: "Contraseña es requerida" });
@@ -98,24 +100,65 @@ const loginUsuario = async (req, res) => {
 const verificarCodigo = async (req, res) => {
   try {
     const { correo, codigo } = req.body;
-    if (!correo || !codigo)
-      return res.status(200).json(errorResponse("FALTAN_DATOS", "Correo y código son requeridos", null, 2));
+    let errores = [];
 
-    const usuario = await UsuarioService.buscarPorCorreo(correo);
-    if (!usuario) return res.status(200).json(errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3));
+    // --- Validaciones ---
+    if (!correo) {
+      errores.push(errorResponse("FALTA_CORREO", "El correo es requerido", null, 2).error);
+    } else {
+      const correoSanitizado = (correo || "").trim().toLowerCase();
+      if (!correoRegex.test(correoSanitizado)) {
+        errores.push(errorResponse("CORREO_INVALIDO", "El correo no tiene un formato válido", null, 2).error);
+      }
+    }
 
+    if (!codigo) {
+      errores.push(errorResponse("FALTA_CODIGO", "El código es requerido", null, 2).error);
+    } else if (!codigoRegex.test(codigo)) {
+      errores.push(errorResponse("CODIGO_INVALIDO", "El código debe ser numérico", null, 2).error);
+    }
+
+    // Si hubo errores de validación, responder de inmediato
+    if (errores.length > 0) {
+      return res.status(200).json({
+        codigo: 2,
+        errores
+      });
+    }
+
+    // Sanitizar correo ya validado
+    const correoSanitizado = correo.trim().toLowerCase();
+
+    // Buscar usuario
+    const usuario = await UsuarioService.buscarPorCorreo(correoSanitizado);
+    if (!usuario) {
+      return res.status(200).json(
+        errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3)
+      );
+    }
+
+    // Validar código OTP
     const valido = await RecuperarService.validarCodigoReset(usuario.id, codigo);
-    if (!valido) return res.status(200).json(errorResponse("CODIGO_INVALIDO", "Código inválido o expirado", null, 2));
+    if (!valido) {
+      return res.status(200).json(
+        errorResponse("CODIGO_INVALIDO", "Código inválido o expirado", null, 2)
+      );
+    }
 
+    // Limpiar código usado
     await RecuperarService.limpiarCodigoReset(usuario.id);
 
+    // Generar token
     const token = jwt.sign(
       { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
       process.env.JWT_SECRET,
-      { expiresIn: '1h' }
+      { expiresIn: '5m' }
     );
 
-    res.json({
+    const expiracionToken = new Date(Date.now() + 5 * 60000);
+    await UsuarioService.guardarToken(usuario.id, token, expiracionToken);
+
+    return res.json({
       mensaje: "Autenticación exitosa",
       token,
       usuario: {
@@ -128,9 +171,13 @@ const verificarCodigo = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(200).json(errorResponse("ERROR_SERVIDOR", `Error al verificar código: ${error.message}`, null, 3));
+    console.error("Error verificarCodigo:", error);
+    return res.status(200).json(
+      errorResponse("ERROR_SERVIDOR", `Error al verificar código: ${error.message}`, null, 3)
+    );
   }
 };
+
 
 module.exports = {
   loginUsuario,
