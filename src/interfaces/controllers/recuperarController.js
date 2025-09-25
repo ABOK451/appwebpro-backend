@@ -72,64 +72,64 @@ const solicitarReset = async (req, res) => {
 const resetConCodigo = async (req, res) => {
   try {
     const { correo, codigo, nuevaPassword } = req.body;
-        const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-
-
-    if (!correo) {
-      return res.status(200).json(
-        errorResponse("FALTA_CORREO", "El correo es requerido", null, 2)
-      );
-    }
-
-    if (!correoRegex.test(correo)) {
-      return res.status(200).json(
-        errorResponse("CORREO_INVALIDO", "El correo no tiene un formato válido", null, 2)
-      );
-    }
-
-    
-
+    const correoSanitizado = (correo || "").toString().trim().toLowerCase();
+    const codigoRegex = /^\d{6}$/; // OTP de 6 dígitos (ajusta si usas otra longitud)
 
     const errores = [];
-    if (!codigo) {
+
+    if (!correo) {
+      errores.push({ codigo: "FALTA_CORREO", mensaje: "El correo es requerido" });
+    } else if (!correoRegex.test(correoSanitizado)) {
+      errores.push({ codigo: "CORREO_INVALIDO", mensaje: "El correo no tiene un formato válido" });
+    }
+
+    if (!codigo && codigo !== 0) {
       errores.push({ codigo: "FALTA_CODIGO", mensaje: "El código es requerido" });
+    } else if (codigo && !codigoRegex.test(String(codigo).trim())) {
+      errores.push({ codigo: "CODIGO_INVALIDO", mensaje: "El código debe ser numérico y de 6 dígitos" });
     }
 
     if (!nuevaPassword) {
       errores.push({ codigo: "FALTA_PASSWORD", mensaje: "La nueva contraseña es requerida" });
     } else if (!passwordRegex.test(nuevaPassword)) {
-      errores.push({ 
-        codigo: "PASSWORD_INVALIDA", 
-        mensaje: "La contraseña no cumple los requisitos: mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" 
+      errores.push({
+        codigo: "PASSWORD_INVALIDA",
+        mensaje: "La contraseña no cumple los requisitos: mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial"
       });
     }
 
     if (errores.length > 0) {
-      return res.status(200).json(errorResponse("ERRORES_VALIDACION", "Errores de validación", errores, 2));
+      return res.status(200).json(
+        errorResponse("ERRORES_VALIDACION", "Errores de validación", errores, 2)
+      );
     }
 
-    const usuario = await UsuarioService.buscarPorCorreo(correo);
+    const usuario = await UsuarioService.buscarPorCorreo(correoSanitizado);
     if (!usuario) {
       return res.status(200).json(errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3));
     }
 
-    const valido = await RecuperarService.validarCodigoReset(usuario.id, codigo);
+    const valido = await RecuperarService.validarCodigoReset(usuario.id, String(codigo).trim());
     if (!valido) {
       return res.status(200).json(errorResponse("CODIGO_INVALIDO", "Código inválido o expirado", null, 2));
     }
 
     const hash = await bcrypt.hash(nuevaPassword, 10);
     await UsuarioService.actualizar(usuario.correo, { passwordHash: hash });
+
     await RecuperarService.limpiarCodigoReset(usuario.id);
 
     return res.json({ mensaje: "Contraseña restablecida con éxito", codigo: 0 });
 
   } catch (error) {
     console.error("Error resetConCodigo:", error);
-    return res.status(200).json(errorResponse("ERROR_SERVIDOR", "Error al restablecer contraseña", error.message, 3));
+    return res.status(200).json(
+      errorResponse("ERROR_SERVIDOR", "Error al restablecer contraseña", error.message, 3)
+    );
   }
 };
+
 
 
 
