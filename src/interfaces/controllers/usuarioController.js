@@ -3,9 +3,15 @@ const bcrypt = require('bcrypt');
 const errorResponse = require('../../helpers/errorResponse');
 
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
-const nombreRegex = /^[A-Za-z]+(?:\s[A-Za-z]+)*$/;
+const nombreRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ]+(?:\s[A-Za-zÁÉÍÓÚáéíóúÑñ]+)*$/;
 const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const telefonoRegex = /^\+\d{1,3}[0-9]{10}$/; 
+
+const validarTelefono = (telefono) => {
+  if (!telefono) return false;
+  telefono = telefono.trim().replace(/\s+/g, '');
+  return /^\+52\d{10}$/.test(telefono);
+};
+
 
 const listarUsuarios = async (req, res) => {
   try {
@@ -24,6 +30,7 @@ const crearUsuario = async (req, res) => {
     app = app ? app.trim() : app;
     apm = apm ? apm.trim() : apm;
     correo = correo ? correo.trim() : correo;
+    telefono = telefono ? telefono.trim() : telefono;
 
     const errores = [];
 
@@ -35,7 +42,7 @@ const crearUsuario = async (req, res) => {
     if (!telefono) errores.push({ codigo: "FALTA_TELEFONO", mensaje: "Teléfono es obligatorio" });
 
     if (correo && !correoRegex.test(correo)) errores.push({ codigo: "CORREO_INVALIDO", mensaje: "El correo no es válido" });
-    if (telefono && !telefonoRegex.test(telefono)) errores.push({ codigo: "TELEFONO_INVALIDO", mensaje: "El teléfono debe incluir código de país y exactamente 10 dígitos, ej: +521234567890" });
+    if (telefono && !validarTelefono(telefono)) errores.push({ codigo: "TELEFONO_INVALIDO", mensaje: "El teléfono debe incluir código de país y exactamente 10 dígitos, ej: +521234567890" });
     if (password && !passwordRegex.test(password)) errores.push({ codigo: "PASSWORD_INVALIDA", mensaje: "La contraseña debe tener mínimo 8 caracteres, incluir al menos una mayúscula, una minúscula, un número y un carácter especial" });
     if (nombre && !nombreRegex.test(nombre)) errores.push({ codigo: "NOMBRE_INVALIDO", mensaje: "El nombre solo puede contener letras y espacios entre nombres" });
     if (app && !nombreRegex.test(app)) errores.push({ codigo: "APP_INVALIDO", mensaje: "El apellido paterno solo puede contener letras y espacios" });
@@ -62,7 +69,6 @@ const eliminarUsuario = async (req, res) => {
   try {
     const { correo } = req.body;
     const errores = [];
-    const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!correo) errores.push({ codigo: "FALTA_CORREO", mensaje: "El correo es requerido para eliminar un usuario" });
     else if (!correoRegex.test(correo)) errores.push({ codigo: "CORREO_INVALIDO", mensaje: "El correo no tiene un formato válido" });
@@ -83,10 +89,17 @@ const eliminarUsuario = async (req, res) => {
   }
 };
 
-
 const actualizarUsuario = async (req, res) => {
   try {
-    const { correo, password, telefono, nombre, app, apm, rol, estado } = req.body;
+    let { correo, password, telefono, nombre, app, apm, rol, estado } = req.body;
+
+    correo = correo ? correo.trim() : correo;
+    telefono = telefono ? telefono.trim() : telefono;
+    nombre = nombre ? nombre.trim() : nombre;
+    app = app ? app.trim() : app;
+    apm = apm ? apm.trim() : apm;
+    rol = rol ? rol.trim() : rol;
+    estado = estado ? estado.trim() : estado;
 
     if (!correo) {
       return res.status(200).json(errorResponse(
@@ -99,18 +112,12 @@ const actualizarUsuario = async (req, res) => {
 
     const errores = [];
 
-    // Usar mismas validaciones que crearUsuario
-    const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
-    const nombreRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ]+(?:\s[A-Za-zÁÉÍÓÚáéíóúÑñ]+)*$/; 
-    const telefonoRegex = /^\+\d{1,3}[0-9]{10}$/;
-
     if (correo && !correoRegex.test(correo)) errores.push({ codigo: "CORREO_INVALIDO", mensaje: "El correo no es válido" });
     if (password && !passwordRegex.test(password)) errores.push({ codigo: "PASSWORD_INVALIDA", mensaje: "La contraseña debe tener mínimo 8 caracteres, incluir al menos una mayúscula, una minúscula, un número y un carácter especial" });
     if (nombre && !nombreRegex.test(nombre)) errores.push({ codigo: "NOMBRE_INVALIDO", mensaje: "El nombre solo puede contener letras y espacios" });
     if (app && !nombreRegex.test(app)) errores.push({ codigo: "APP_INVALIDO", mensaje: "El apellido paterno solo puede contener letras y espacios" });
     if (apm && !nombreRegex.test(apm)) errores.push({ codigo: "APM_INVALIDO", mensaje: "El apellido materno solo puede contener letras y espacios" });
-    if (telefono && !telefonoRegex.test(telefono)) errores.push({ codigo: "TELEFONO_INVALIDO", mensaje: "El teléfono debe incluir código de país y 10 dígitos, ej: +521234567890" });
+    if (telefono && !validarTelefono(telefono)) errores.push({ codigo: "TELEFONO_INVALIDO", mensaje: "El teléfono debe incluir código de país y exactamente 10 dígitos, ej: +521234567890" });
 
     if (rol && typeof rol !== 'string') errores.push({ codigo: "ROL_INVALIDO", mensaje: "El rol solo puede contener texto" });
     if (estado && typeof estado !== 'string') errores.push({ codigo: "ESTADO_INVALIDO", mensaje: "El estado solo puede contener texto" });
@@ -126,14 +133,13 @@ const actualizarUsuario = async (req, res) => {
 
     const datosActualizar = {};
 
-    // Solo guardar lo que venga con valor válido
     if (password) datosActualizar.password = await bcrypt.hash(password, 10);
-    if (nombre) datosActualizar.nombre = nombre.trim();
-    if (app) datosActualizar.app = app.trim();
-    if (apm) datosActualizar.apm = apm.trim();
-    if (telefono) datosActualizar.telefono = telefono.trim();
-    if (rol) datosActualizar.rol = rol.trim();
-    if (estado) datosActualizar.estado = estado.trim();
+    if (nombre) datosActualizar.nombre = nombre;
+    if (app) datosActualizar.app = app;
+    if (apm) datosActualizar.apm = apm;
+    if (telefono) datosActualizar.telefono = telefono;
+    if (rol) datosActualizar.rol = rol;
+    if (estado) datosActualizar.estado = estado;
 
     const usuarioActualizado = await UsuarioService.actualizar(correo, datosActualizar);
     if (!usuarioActualizado) {
@@ -151,8 +157,6 @@ const actualizarUsuario = async (req, res) => {
     res.status(200).json(errorResponse("ERROR_ACTUALIZAR", "Error al actualizar usuario", error.message, 3));
   }
 };
-
-
 
 module.exports = {
   listarUsuarios,
