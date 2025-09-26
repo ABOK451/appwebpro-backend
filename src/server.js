@@ -4,6 +4,7 @@ const YAML = require("yamljs");
 const selfsigned = require("selfsigned");
 const fs = require("fs");
 const https = require("https");
+const http = require("http");
 const cors = require("cors");
 
 const pingRoutes = require("./interfaces/routes/pingRoutes");
@@ -16,8 +17,9 @@ require("dotenv").config();
 
 const app = express();
 
+// Middleware para JSON
 app.use(express.json({
-  verify: (req, res, buf, encoding) => {
+  verify: (req, res, buf) => {
     try {
       JSON.parse(buf);
     } catch (e) {
@@ -31,33 +33,34 @@ app.use(express.json({
     }
   }
 }));
+
 app.use(express.urlencoded({ extended: true }));
 
+// Logs de headers
 app.use((req, res, next) => {
   console.log("[GLOBAL HEADERS]", req.headers);
   next();
 });
 
-
-
+// CORS
 app.use(cors({
-  origin: "*", 
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+  origin: "*",
+  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
+  allowedHeaders: ["Content-Type","Authorization"]
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
+// Swagger
 const swaggerDocument = YAML.load("./src/config/OpenApi/swagger.yaml");
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
+// Rutas
 app.use("/", pingRoutes);
 app.use("/", usuarioRoutes);
 app.use("/", recuperarRoutes);
 app.use("/", loginRoutes);
 app.use("/", rolesRoutes);
 
+// Certificados
 const certDir = "src/certs";
 if (!fs.existsSync(certDir)) fs.mkdirSync(certDir);
 
@@ -77,8 +80,14 @@ const sslOptions = {
   cert: fs.readFileSync(certPath)
 };
 
+// Puerto HTTPS
 const PORT = process.env.PORT || 3000;
-
 https.createServer(sslOptions, app).listen(PORT, () => {
   console.log(`Servidor HTTPS corriendo en https://localhost:${PORT}`);
+});
+
+// Puerto HTTP para pruebas locales
+const PORT_HTTP = 3001;
+http.createServer(app).listen(PORT_HTTP, () => {
+  console.log(`Servidor HTTP corriendo en http://localhost:${PORT_HTTP}`);
 });

@@ -2,66 +2,69 @@ const UsuarioService = require('../../application/usuarioService');
 const errorResponse = require('../../helpers/errorResponse');
 
 const verificarSesionActiva = async (req, res, next) => {
+  const correo = req.body?.correo;
+  console.log("[verificarSesionActiva] Inicio de verificación para correo:", correo);
+
+  if (!correo) {
+    console.log("[verificarSesionActiva] FALTA_CORREO");
+    return res.status(200).json(
+      errorResponse("FALTA_CORREO", "Correo es requerido", null, 2)
+    );
+  }
+
+  const client = await pool.connect();
+
   try {
-    const correo = req.body?.correo;
-    console.log("[verificarSesionActiva] Inicio de verificación para correo:", correo);
+    await client.query('BEGIN');
 
-    if (!correo) {
-      console.log("[verificarSesionActiva] FALTA_CORREO");
-      return res.status(200).json(
-        errorResponse("FALTA_CORREO", "Correo es requerido", null, 2)
-      );
-    }
+    // Bloquea la fila del usuario hasta que termine la transacción
+    const usuarioRes = await client.query(
+      `SELECT * FROM usuarios WHERE correo = $1 FOR UPDATE`,
+      [correo]
+    );
+    const usuario = usuarioRes.rows[0];
 
-    // Buscar usuario
-    const usuario = await UsuarioService.buscarPorCorreo(correo);
     if (!usuario) {
+      await client.query('ROLLBACK');
       console.log("[verificarSesionActiva] Usuario no encontrado:", correo);
       return res.status(200).json(
         errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3)
       );
     }
-    console.log("[verificarSesionActiva] Usuario encontrado:", usuario.id);
 
-    // Obtener login
-    const login = await UsuarioService.obtenerLogin(usuario.id);
+    // Revisar login activo
+    const loginRes = await client.query(
+      `SELECT * FROM logins WHERE usuario_id = $1 FOR UPDATE`,
+      [usuario.id]
+    );
+    const login = loginRes.rows[0];
     const ahora = new Date();
-    console.log("[verificarSesionActiva] Login obtenido:", login);
 
-    if (login && login.sesion_activa) {
-      // ✅ Ya hay sesión activa
-      if (login.fin_sesion && login.fin_sesion > ahora) {
-        console.log("[verificarSesionActiva] Sesión sigue activa");
-        return res.status(200).json({
-          mensaje: "Ya existe una sesión activa",
-          codigo: 0,
-          token: login.token
-        });
-      } else {
-        // ✅ Sesión expirada → cerrarla
-        console.log("[verificarSesionActiva] Sesión expirada, cerrando...");
-        await UsuarioService.actualizarLogin(usuario.id, {
-          sesion_activa: false,
-          fin_sesion: null,
-          token: null,
-          token_expires: null
-        });
-        console.log("[verificarSesionActiva] Sesión cerrada correctamente");
-      }
+    if (login && login.sesion_activa && login.fin_sesion > ahora) {
+      await client.query('COMMIT');
+      console.log("[verificarSesionActiva] Sesión sigue activa");
+      return res.status(200).json({
+        mensaje: "Ya existe una sesión activa",
+        codigo: 0,
+        token: login.token
+      });
     }
 
-    // ✅ Solo si no hay sesión activa → continuar a login
-    console.log("[verificarSesionActiva] No hay sesión activa, continuando...");
+    // Si la sesión expiró o no hay, continuar
+    console.log("[verificarSesionActiva] No hay sesión activa o expiró, continuando...");
+    await client.query('COMMIT');
     next();
 
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error("[verificarSesionActiva] ERROR:", error);
     return res.status(200).json(
       errorResponse("ERROR_SERVIDOR", "Error al verificar sesión activa", error.message, 3)
     );
+  } finally {
+    client.release();
   }
 };
-
 
 
 const extenderSesion = async (req, res, next) => {
