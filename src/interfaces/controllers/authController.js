@@ -119,15 +119,12 @@ const verificarCodigo = async (req, res) => {
     }
 
     if (errores.length > 0) {
-      return res.status(200).json({
-        codigo: 2,
-        errores
-      });
+      return res.status(200).json({ codigo: 2, errores });
     }
 
     const correoSanitizado = correo.trim().toLowerCase();
-
     const usuario = await UsuarioService.buscarPorCorreo(correoSanitizado);
+
     if (!usuario) {
       return res.status(200).json(
         errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3)
@@ -141,19 +138,26 @@ const verificarCodigo = async (req, res) => {
       );
     }
 
-    
-
-
     await RecuperarService.limpiarCodigoReset(usuario.id);
 
-    const token = jwt.sign(
-      { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
+    // --- Manejo de token existente ---
+    let login = await UsuarioService.obtenerLogin(usuario.id);
+    const ahora = new Date();
+    let token;
 
-    const expiracionToken = new Date(Date.now() + 5 * 60000);
-    await UsuarioService.guardarToken(usuario.id, token, expiracionToken);
+    if (login && login.sesion_activa && login.fin_sesion && login.fin_sesion > ahora) {
+      // Usar token existente si la sesión sigue activa
+      token = login.token;
+    } else {
+      // Generar un token nuevo y guardar
+      token = jwt.sign(
+        { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+      const expiracionToken = new Date(Date.now() + 5 * 60000);
+      await UsuarioService.guardarToken(usuario.id, token, expiracionToken);
+    }
 
     return res.json({
       mensaje: "Autenticación exitosa",
@@ -174,6 +178,7 @@ const verificarCodigo = async (req, res) => {
     );
   }
 };
+
 
 
 module.exports = {
