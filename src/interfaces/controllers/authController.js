@@ -118,7 +118,6 @@ const verificarCodigo = async (req, res) => {
       errores.push(errorResponse("CODIGO_INVALIDO", "El código debe ser numérico", null, 2).error);
     }
 
-    // Si hubo errores de validación, responder de inmediato
     if (errores.length > 0) {
       return res.status(200).json({
         codigo: 2,
@@ -126,10 +125,8 @@ const verificarCodigo = async (req, res) => {
       });
     }
 
-    // Sanitizar correo ya validado
     const correoSanitizado = correo.trim().toLowerCase();
 
-    // Buscar usuario
     const usuario = await UsuarioService.buscarPorCorreo(correoSanitizado);
     if (!usuario) {
       return res.status(200).json(
@@ -137,7 +134,6 @@ const verificarCodigo = async (req, res) => {
       );
     }
 
-    // Validar código OTP
     const valido = await RecuperarService.validarCodigoReset(usuario.id, codigo);
     if (!valido) {
       return res.status(200).json(
@@ -145,10 +141,8 @@ const verificarCodigo = async (req, res) => {
       );
     }
 
-    // Limpiar código usado
     await RecuperarService.limpiarCodigoReset(usuario.id);
 
-    // Generar token
     const token = jwt.sign(
       { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
       process.env.JWT_SECRET,
