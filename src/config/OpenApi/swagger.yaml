@@ -32,6 +32,8 @@ paths:
   /usuarios:
     get:
       summary: Lista todos los usuarios
+      security:
+       - bearerAuth: []
       responses:
         '200':
           description: Lista de usuarios
@@ -70,6 +72,8 @@ paths:
   /usuarios/nuevo:
     post:
       summary: Crear un nuevo usuario
+      security:
+       - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -139,6 +143,8 @@ paths:
   /usuarios/actualizar:
     put:
       summary: Actualizar un usuario por correo
+      security:
+       - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -221,6 +227,8 @@ paths:
   /usuarios/eliminar:
     delete:
       summary: Eliminar un usuario
+      security:
+       - bearerAuth: []
       requestBody:
         required: true
         content:

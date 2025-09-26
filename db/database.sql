@@ -27,5 +27,10 @@ ADD COLUMN longitud DECIMAL(9,6);
 ALTER TABLE usuario_login
 ADD COLUMN token VARCHAR(500),
 ADD COLUMN token_expires TIMESTAMP;
+ALTER TABLE usuario_login
+ADD COLUMN sesion_activa BOOLEAN DEFAULT FALSE, -- indica si la sesión sigue abierta
+ADD COLUMN inicio_sesion TIMESTAMP,             -- momento en que arrancó
+ADD COLUMN fin_sesion TIMESTAMP;                -- momento en que se cerró
+
 
 

@@ -32,6 +32,11 @@ app.use(express.json({
   }
 }));
 
+app.use((req, res, next) => {
+  console.log("[GLOBAL HEADERS]", req.headers);
+  next();
+});
+
 
 
 app.use(cors({
