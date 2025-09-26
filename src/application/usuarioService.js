@@ -208,6 +208,20 @@ static async guardarToken(usuario_id, token, expiracion = null) {
 
 
 static async obtenerLogin(usuario_id) {
+  const res = await pool.query(
+    `SELECT usuario_id, token, token_expires, sesion_activa, inicio_sesion, fin_sesion
+     FROM usuario_login
+     WHERE usuario_id = $1`,
+    [usuario_id]
+  );
+  if (res.rows.length === 0) return null;
+  const row = res.rows[0];
+
+  return {
+    ...row,
+    inicio_sesion: row.inicio_sesion ? new Date(row.inicio_sesion) : null,
+    fin_sesion: row.fin_sesion ? new Date(row.fin_sesion) : null
+  };
   try {
     // Abrimos una transacción para usar FOR UPDATE
     const client = await pool.connect();
@@ -310,8 +324,8 @@ static async buscarPorToken(token) {
 
 
 
-  
-  
+
+
 }
 
 module.exports = UsuarioService;

@@ -34,7 +34,6 @@ const verificarSesionActiva = async (req, res, next) => {
       );
     }
 
-    // Revisar login activo
     const loginRes = await client.query(
       `SELECT * FROM usuario_login WHERE usuario_id = $1 FOR UPDATE`,
       [usuario.id]
