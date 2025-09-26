@@ -4,7 +4,6 @@ const errorResponse = require('../../helpers/errorResponse');
 const verificarSesionActiva = async (req, res, next) => {
   try {
     const correo = req.body?.correo;
-
     console.log("[verificarSesionActiva] Inicio de verificación para correo:", correo);
 
     if (!correo) {
@@ -29,25 +28,29 @@ const verificarSesionActiva = async (req, res, next) => {
     const ahora = new Date();
     console.log("[verificarSesionActiva] Login obtenido:", login);
 
-    if (login && login.sesion_activa === true) {
-      // Verificar si la sesión expiró
-      if (!login.fin_sesion || login.fin_sesion <= ahora) {
-        console.log("[verificarSesionActiva] Sesión expirada, cerrando...");
-        await UsuarioService.actualizarLogin(usuario.id, { 
-          sesion_activa: false,
-          fin_sesion: null
-        });
-        console.log("[verificarSesionActiva] Sesión cerrada correctamente");
-      } else {
-        // La sesión sigue activa
+    if (login && login.sesion_activa) {
+      // ✅ Ya hay sesión activa
+      if (login.fin_sesion && login.fin_sesion > ahora) {
+        console.log("[verificarSesionActiva] Sesión sigue activa");
         return res.status(200).json({
           mensaje: "Ya existe una sesión activa",
           codigo: 0,
           token: login.token
         });
+      } else {
+        // ✅ Sesión expirada → cerrarla
+        console.log("[verificarSesionActiva] Sesión expirada, cerrando...");
+        await UsuarioService.actualizarLogin(usuario.id, {
+          sesion_activa: false,
+          fin_sesion: null,
+          token: null,
+          token_expires: null
+        });
+        console.log("[verificarSesionActiva] Sesión cerrada correctamente");
       }
     }
 
+    // ✅ Solo si no hay sesión activa → continuar a login
     console.log("[verificarSesionActiva] No hay sesión activa, continuando...");
     next();
 
@@ -58,6 +61,7 @@ const verificarSesionActiva = async (req, res, next) => {
     );
   }
 };
+
 
 
 const extenderSesion = async (req, res, next) => {

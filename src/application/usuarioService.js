@@ -167,6 +167,28 @@ static async guardarToken(usuario_id, token, expiracion = null) {
   const ahora = new Date();
   const fin = expiracion || new Date(ahora.getTime() + 5 * 60000); // 5 minutos por defecto
 
+  // Primero revisa si ya existe un token activo
+  const check = await pool.query(
+    `SELECT token, token_expires, sesion_activa
+     FROM usuario_login 
+     WHERE usuario_id = $1`,
+    [usuario_id]
+  );
+
+  if (check.rows.length > 0) {
+    const row = check.rows[0];
+    if (row.sesion_activa && row.token_expires && new Date(row.token_expires) > ahora) {
+      return {
+        usuario_id,
+        token: row.token,
+        token_expires: row.token_expires,
+        sesion_activa: row.sesion_activa,
+        inicio_sesion: row.inicio_sesion,
+        fin_sesion: row.fin_sesion
+      };
+    }
+  }
+
   const res = await pool.query(
     `UPDATE usuario_login
      SET token = $1,
@@ -176,12 +198,13 @@ static async guardarToken(usuario_id, token, expiracion = null) {
          fin_sesion = $3
      WHERE usuario_id = $4
      RETURNING usuario_id, token, token_expires, sesion_activa, inicio_sesion, fin_sesion`,
-    [token, expiracion, fin, usuario_id]
+    [token, fin, fin, usuario_id]
   );
 
   if (res.rows.length === 0) return null;
   return res.rows[0];
 }
+
 
 
 static async obtenerLogin(usuario_id) {
