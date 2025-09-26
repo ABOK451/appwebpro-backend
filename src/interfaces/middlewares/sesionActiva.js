@@ -3,7 +3,7 @@ const errorResponse = require('../../helpers/errorResponse');
 
 const verificarSesionActiva = async (req, res, next) => {
   try {
-    const { correo } = req.body;
+    const correo = req.body?.correo;
 
     console.log("[verificarSesionActiva] Inicio de verificación para correo:", correo);
 
