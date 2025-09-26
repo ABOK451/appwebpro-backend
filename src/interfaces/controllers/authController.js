@@ -141,6 +141,9 @@ const verificarCodigo = async (req, res) => {
       );
     }
 
+    
+
+
     await RecuperarService.limpiarCodigoReset(usuario.id);
 
     const token = jwt.sign(
