@@ -41,19 +41,39 @@ class UsuarioService {
   }
 }
 
-  static async actualizarLogin(usuario_id, { failed_attempts, blocked_until }) {
+static async actualizarLogin(usuario_id, {
+  failed_attempts = null,
+  blocked_until = null,
+  ultimo_login = null,
+  latitud = null,
+  longitud = null,
+  token = null,
+  token_expires = null,
+  sesion_activa = null,
+  inicio_sesion = null,
+  fin_sesion = null
+}) {
   const res = await pool.query(
     `UPDATE usuario_login
      SET failed_attempts = COALESCE($1, failed_attempts),
-         blocked_until = $2
-     WHERE usuario_id = $3
-     RETURNING usuario_id, failed_attempts, blocked_until`,
-    [failed_attempts, blocked_until, usuario_id]
+         blocked_until = COALESCE($2, blocked_until),
+         ultimo_login = COALESCE($3, ultimo_login),
+         latitud = COALESCE($4, latitud),
+         longitud = COALESCE($5, longitud),
+         token = COALESCE($6, token),
+         token_expires = COALESCE($7, token_expires),
+         sesion_activa = COALESCE($8, sesion_activa),
+         inicio_sesion = COALESCE($9, inicio_sesion),
+         fin_sesion = COALESCE($10, fin_sesion)
+     WHERE usuario_id = $11
+     RETURNING usuario_id, failed_attempts, blocked_until, ultimo_login, latitud, longitud, token, token_expires, sesion_activa, inicio_sesion, fin_sesion`,
+    [failed_attempts, blocked_until, ultimo_login, latitud, longitud, token, token_expires, sesion_activa, inicio_sesion, fin_sesion, usuario_id]
   );
 
   if (res.rows.length === 0) return null;
   return res.rows[0];
 }
+
 
 
   static async actualizar(correoBuscado, { 
@@ -144,21 +164,25 @@ class UsuarioService {
 }
 
 static async guardarToken(usuario_id, token, expiracion = null) {
+  const ahora = new Date();
+  const fin = expiracion || new Date(ahora.getTime() + 5 * 60000); // 5 minutos por defecto
+
   const res = await pool.query(
     `UPDATE usuario_login
      SET token = $1,
          token_expires = $2,
          sesion_activa = TRUE,
          inicio_sesion = NOW(),
-         fin_sesion = NULL
-     WHERE usuario_id = $3
-     RETURNING usuario_id, token, token_expires, sesion_activa, inicio_sesion`,
-    [token, expiracion, usuario_id]
+         fin_sesion = $3
+     WHERE usuario_id = $4
+     RETURNING usuario_id, token, token_expires, sesion_activa, inicio_sesion, fin_sesion`,
+    [token, expiracion, fin, usuario_id]
   );
 
   if (res.rows.length === 0) return null;
   return res.rows[0];
 }
+
 
 static async obtenerLogin(usuario_id) {
   const res = await pool.query(
@@ -168,8 +192,15 @@ static async obtenerLogin(usuario_id) {
     [usuario_id]
   );
   if (res.rows.length === 0) return null;
-  return res.rows[0];
+  const row = res.rows[0];
+
+  return {
+    ...row,
+    inicio_sesion: row.inicio_sesion ? new Date(row.inicio_sesion) : null,
+    fin_sesion: row.fin_sesion ? new Date(row.fin_sesion) : null
+  };
 }
+
 
 
   static async obtenerTokenActivo(correo) {
@@ -189,6 +220,47 @@ static async obtenerLogin(usuario_id) {
 
   return row.token;
 }
+
+static async buscarPorToken(token) {
+  try {
+    const res = await pool.query(
+      `SELECT u.id, u.correo, u.rol, u.estado, u.nombre, u.app, u.apm, u.telefono,
+              ul.sesion_activa, ul.token, ul.token_expires, ul.inicio_sesion, ul.fin_sesion
+       FROM usuarios u
+       JOIN usuario_login ul ON ul.usuario_id = u.id
+       WHERE ul.token = $1`,
+      [token]
+    );
+
+    console.log("[buscarPorToken] Resultado query:", res.rows);
+
+    if (res.rows.length === 0) return null;
+
+    const u = res.rows[0];
+    return {
+      id: u.id,
+      correo: u.correo,
+      rol: u.rol,
+      estado: u.estado,
+      nombre: u.nombre,
+      app: u.app,
+      apm: u.apm,
+      telefono: u.telefono,
+      sesion_activa: u.sesion_activa,
+      token: u.token,
+      token_expires: u.token_expires ? new Date(u.token_expires) : null,
+      inicio_sesion: u.inicio_sesion ? new Date(u.inicio_sesion) : null,
+      fin_sesion: u.fin_sesion ? new Date(u.fin_sesion) : null
+    };
+  } catch (err) {
+    console.error("[buscarPorToken] ERROR:", err);
+    return null;
+  }
+}
+
+
+
+
 
 
 

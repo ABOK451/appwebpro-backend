@@ -149,7 +149,7 @@ const verificarCodigo = async (req, res) => {
     const token = jwt.sign(
       { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
       process.env.JWT_SECRET,
-      { expiresIn: '5m' }
+      { expiresIn: '1h' }
     );
 
     const expiracionToken = new Date(Date.now() + 5 * 60000);
