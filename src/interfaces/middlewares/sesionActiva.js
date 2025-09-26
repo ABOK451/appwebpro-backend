@@ -1,4 +1,6 @@
 const UsuarioService = require('../../application/usuarioService');
+const pool = require('../../infrastructure/db');
+
 const errorResponse = require('../../helpers/errorResponse');
 
 const verificarSesionActiva = async (req, res, next) => {
@@ -34,7 +36,7 @@ const verificarSesionActiva = async (req, res, next) => {
 
     // Revisar login activo
     const loginRes = await client.query(
-      `SELECT * FROM logins WHERE usuario_id = $1 FOR UPDATE`,
+      `SELECT * FROM usuario_login WHERE usuario_id = $1 FOR UPDATE`,
       [usuario.id]
     );
     const login = loginRes.rows[0];
