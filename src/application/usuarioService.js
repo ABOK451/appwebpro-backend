@@ -208,21 +208,42 @@ static async guardarToken(usuario_id, token, expiracion = null) {
 
 
 static async obtenerLogin(usuario_id) {
-  const res = await pool.query(
-    `SELECT usuario_id, token, token_expires, sesion_activa, inicio_sesion, fin_sesion
-     FROM usuario_login
-     WHERE usuario_id = $1`,
-    [usuario_id]
-  );
-  if (res.rows.length === 0) return null;
-  const row = res.rows[0];
+  try {
+    // Abrimos una transacción para usar FOR UPDATE
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN'); // Inicia la transacción
 
-  return {
-    ...row,
-    inicio_sesion: row.inicio_sesion ? new Date(row.inicio_sesion) : null,
-    fin_sesion: row.fin_sesion ? new Date(row.fin_sesion) : null
-  };
+      // Bloquea la fila para evitar que otras solicitudes la lean hasta terminar
+      const res = await client.query(
+        `SELECT usuario_id, token, token_expires, sesion_activa, inicio_sesion, fin_sesion 
+         FROM usuario_login 
+         WHERE usuario_id = $1 
+         FOR UPDATE`,
+        [usuario_id]
+      );
+
+      if (res.rows.length === 0) return null;
+      const row = res.rows[0];
+
+      await client.query('COMMIT'); // Confirmamos la transacción
+      return {
+        ...row,
+        inicio_sesion: row.inicio_sesion ? new Date(row.inicio_sesion) : null,
+        fin_sesion: row.fin_sesion ? new Date(row.fin_sesion) : null
+      };
+    } catch (err) {
+      await client.query('ROLLBACK'); // Revertir si hay error
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('[obtenerLogin] ERROR:', err);
+    return null;
+  }
 }
+
 
 
 
