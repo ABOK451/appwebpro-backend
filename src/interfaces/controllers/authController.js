@@ -126,37 +126,58 @@ const verificarCodigo = async (req, res) => {
     const usuario = await UsuarioService.buscarPorCorreo(correoSanitizado);
 
     if (!usuario) {
-      return res.status(200).json(
-        errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3)
-      );
+      return res.status(200).json(errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3));
     }
 
     const valido = await RecuperarService.validarCodigoReset(usuario.id, codigo);
     if (!valido) {
-      return res.status(200).json(
-        errorResponse("CODIGO_INVALIDO", "Código inválido o expirado", null, 2)
-      );
+      return res.status(200).json(errorResponse("CODIGO_INVALIDO", "Código inválido o expirado", null, 2));
     }
 
     await RecuperarService.limpiarCodigoReset(usuario.id);
 
-    // --- Manejo de token existente ---
-    let login = await UsuarioService.obtenerLogin(usuario.id);
-    const ahora = new Date();
+    // --- Manejo de token con FOR UPDATE ---
+    const client = await pool.connect();
     let token;
+    try {
+      await client.query('BEGIN');
 
-    if (login && login.sesion_activa && login.fin_sesion && login.fin_sesion > ahora) {
-      // Usar token existente si la sesión sigue activa
-      token = login.token;
-    } else {
-      // Generar un token nuevo y guardar
-      token = jwt.sign(
-        { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
-        process.env.JWT_SECRET,
-        { expiresIn: '1h' }
+      const resLogin = await client.query(
+        `SELECT * FROM usuario_login WHERE usuario_id = $1 FOR UPDATE`,
+        [usuario.id]
       );
-      const expiracionToken = new Date(Date.now() + 5 * 60000);
-      await UsuarioService.guardarToken(usuario.id, token, expiracionToken);
+
+      const ahora = new Date();
+      if (resLogin.rows.length > 0) {
+        const login = resLogin.rows[0];
+
+        if (login.sesion_activa && login.fin_sesion && login.fin_sesion > ahora) {
+          // Usar token existente
+          token = login.token;
+        } else {
+          // Generar token nuevo
+          token = jwt.sign(
+            { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
+            process.env.JWT_SECRET,
+            { expiresIn: '1h' }
+          );
+
+          const expiracionToken = new Date(Date.now() + 5 * 60000);
+          await client.query(
+            `UPDATE usuario_login 
+             SET token = $1, token_expires = $2, sesion_activa = TRUE, inicio_sesion = NOW(), fin_sesion = $3
+             WHERE usuario_id = $4`,
+            [token, expiracionToken, expiracionToken, usuario.id]
+          );
+        }
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
 
     return res.json({
@@ -178,6 +199,7 @@ const verificarCodigo = async (req, res) => {
     );
   }
 };
+
 
 
 
