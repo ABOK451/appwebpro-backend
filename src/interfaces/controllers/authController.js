@@ -138,38 +138,42 @@ const verificarCodigo = async (req, res) => {
     await RecuperarService.limpiarCodigoReset(usuario.id);
 
     // --- Manejo de token con FOR UPDATE ---
-    const client = await pool.connect();
-    let token;
-    try {
-      await client.query('BEGIN');
+    const login = resLogin.rows[0];
+const ahora = new Date();
 
-      const resLogin = await client.query(
-        `SELECT * FROM usuario_login WHERE usuario_id = $1 FOR UPDATE`,
-        [usuario.id]
-      );
+if (login.sesion_activa && login.fin_sesion && login.fin_sesion > ahora) {
+  // ✅ Sesión sigue activa → devolver mensaje de sesión activa
+  token = login.token;
+  return res.status(200).json({
+    mensaje: "Ya existe una sesión activa",
+    codigo: 0,
+    token
+  });
+} else if (login.sesion_activa && (!login.fin_sesion || login.fin_sesion <= ahora)) {
+  // ✅ Sesión expiró → cerrar sesión y generar token nuevo
+  await client.query(
+    `UPDATE usuario_login 
+     SET sesion_activa = FALSE, token = NULL, token_expires = NULL, inicio_sesion = NULL, fin_sesion = NULL
+     WHERE usuario_id = $1`,
+    [usuario.id]
+  );
+}
 
-      const ahora = new Date();
-      if (resLogin.rows.length > 0) {
-        const login = resLogin.rows[0];
+// Si no hay sesión activa → generar token nuevo
+token = jwt.sign(
+  { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
+  process.env.JWT_SECRET,
+  { expiresIn: '1h' }
+);
 
-        if (login.sesion_activa && login.fin_sesion && login.fin_sesion > ahora) {
-          // Usar token existente
-          token = login.token;
-        } else {
-          // Generar token nuevo
-          token = jwt.sign(
-            { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
-            process.env.JWT_SECRET,
-            { expiresIn: '1h' }
-          );
+const expiracionToken = new Date(Date.now() + 5 * 60000);
+await client.query(
+  `UPDATE usuario_login 
+   SET token = $1, token_expires = $2, sesion_activa = TRUE, inicio_sesion = NOW(), fin_sesion = $3
+   WHERE usuario_id = $4`,
+  [token, expiracionToken, expiracionToken, usuario.id]
+);
 
-          const expiracionToken = new Date(Date.now() + 5 * 60000);
-          await client.query(
-            `UPDATE usuario_login 
-             SET token = $1, token_expires = $2, sesion_activa = TRUE, inicio_sesion = NOW(), fin_sesion = $3
-             WHERE usuario_id = $4`,
-            [token, expiracionToken, expiracionToken, usuario.id]
-          );
         }
       }
 
