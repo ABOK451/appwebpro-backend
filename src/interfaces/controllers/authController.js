@@ -3,6 +3,7 @@ const RecuperarService = require('../../application/recuperarService');
 const AuthService = require('../../application/authService');
 const { obtenerUbicacionIP } = require('../../infrastructure/utils/geolocation');
 const bcrypt = require('bcrypt');
+const pool = require('../../infrastructure/db'); // Ajusta la ruta según tu proyecto
 const jwt = require('jsonwebtoken');
 const transporter = require('../../config/email');
 const { loginAttempt, isBlocked } = require("../middlewares/loginAttempts");
