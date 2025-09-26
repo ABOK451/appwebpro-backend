@@ -144,18 +144,33 @@ class UsuarioService {
 }
 
 static async guardarToken(usuario_id, token, expiracion = null) {
-    const res = await pool.query(
-      `UPDATE usuario_login
-       SET token = $1,
-           token_expires = $2
-       WHERE usuario_id = $3
-       RETURNING usuario_id, token, token_expires`,
-      [token, expiracion, usuario_id]
-    );
+  const res = await pool.query(
+    `UPDATE usuario_login
+     SET token = $1,
+         token_expires = $2,
+         sesion_activa = TRUE,
+         inicio_sesion = NOW(),
+         fin_sesion = NULL
+     WHERE usuario_id = $3
+     RETURNING usuario_id, token, token_expires, sesion_activa, inicio_sesion`,
+    [token, expiracion, usuario_id]
+  );
 
-    if (res.rows.length === 0) return null;
-    return res.rows[0];
-  }
+  if (res.rows.length === 0) return null;
+  return res.rows[0];
+}
+
+static async obtenerLogin(usuario_id) {
+  const res = await pool.query(
+    `SELECT usuario_id, token, token_expires, sesion_activa, inicio_sesion, fin_sesion
+     FROM usuario_login
+     WHERE usuario_id = $1`,
+    [usuario_id]
+  );
+  if (res.rows.length === 0) return null;
+  return res.rows[0];
+}
+
 
   static async obtenerTokenActivo(correo) {
   const res = await pool.query(
