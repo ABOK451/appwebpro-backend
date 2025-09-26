@@ -99,111 +99,84 @@ const loginUsuario = async (req, res) => {
 };
 
 const verificarCodigo = async (req, res) => {
+  const client = await pool.connect();
   try {
     const { correo, codigo } = req.body;
     let errores = [];
 
     // --- Validaciones ---
-    if (!correo) {
-      errores.push(errorResponse("FALTA_CORREO", "El correo es requerido", null, 2).error);
-    } else {
-      const correoSanitizado = (correo || "").trim().toLowerCase();
-      if (!correoRegex.test(correoSanitizado)) {
-        errores.push(errorResponse("CORREO_INVALIDO", "El correo no tiene un formato válido", null, 2).error);
-      }
-    }
-
-    if (!codigo) {
-      errores.push(errorResponse("FALTA_CODIGO", "El código es requerido", null, 2).error);
-    } else if (!codigoRegex.test(codigo)) {
-      errores.push(errorResponse("CODIGO_INVALIDO", "El código debe ser numérico", null, 2).error);
-    }
-
-    if (errores.length > 0) {
-      return res.status(200).json({ codigo: 2, errores });
-    }
+    if (!correo) errores.push(errorResponse("FALTA_CORREO", "El correo es requerido", null, 2).error);
+    if (!codigo) errores.push(errorResponse("FALTA_CODIGO", "El código es requerido", null, 2).error);
+    if (errores.length) return res.status(200).json({ codigo: 2, errores });
 
     const correoSanitizado = correo.trim().toLowerCase();
     const usuario = await UsuarioService.buscarPorCorreo(correoSanitizado);
-
-    if (!usuario) {
-      return res.status(200).json(errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3));
-    }
+    if (!usuario) return res.status(200).json(errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3));
 
     const valido = await RecuperarService.validarCodigoReset(usuario.id, codigo);
-    if (!valido) {
-      return res.status(200).json(errorResponse("CODIGO_INVALIDO", "Código inválido o expirado", null, 2));
-    }
-
+    if (!valido) return res.status(200).json(errorResponse("CODIGO_INVALIDO", "Código inválido o expirado", null, 2));
     await RecuperarService.limpiarCodigoReset(usuario.id);
 
-    // --- Manejo de token con FOR UPDATE ---
-    const login = resLogin.rows[0];
-const ahora = new Date();
+    await client.query('BEGIN');
 
-if (login.sesion_activa && login.fin_sesion && login.fin_sesion > ahora) {
-  // ✅ Sesión sigue activa → devolver mensaje de sesión activa
-  token = login.token;
-  return res.status(200).json({
-    mensaje: "Ya existe una sesión activa",
-    codigo: 0,
-    token
-  });
-} else if (login.sesion_activa && (!login.fin_sesion || login.fin_sesion <= ahora)) {
-  // ✅ Sesión expiró → cerrar sesión y generar token nuevo
-  await client.query(
-    `UPDATE usuario_login 
-     SET sesion_activa = FALSE, token = NULL, token_expires = NULL, inicio_sesion = NULL, fin_sesion = NULL
-     WHERE usuario_id = $1`,
-    [usuario.id]
-  );
-}
+    const resLogin = await client.query(
+      `SELECT * FROM usuario_login WHERE usuario_id = $1 FOR UPDATE`,
+      [usuario.id]
+    );
 
-// Si no hay sesión activa → generar token nuevo
-token = jwt.sign(
-  { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
-  process.env.JWT_SECRET,
-  { expiresIn: '1h' }
-);
+    const ahora = new Date();
+    let token;
 
-const expiracionToken = new Date(Date.now() + 5 * 60000);
-await client.query(
-  `UPDATE usuario_login 
-   SET token = $1, token_expires = $2, sesion_activa = TRUE, inicio_sesion = NOW(), fin_sesion = $3
-   WHERE usuario_id = $4`,
-  [token, expiracionToken, expiracionToken, usuario.id]
-);
+    if (resLogin.rows.length > 0) {
+      const login = resLogin.rows[0];
 
-        }
+      if (login.sesion_activa && login.fin_sesion && login.fin_sesion > ahora) {
+        // Sesión activa
+        token = login.token;
+        await client.query('COMMIT');
+        return res.status(200).json({ mensaje: "Ya existe una sesión activa", codigo: 0, token });
       }
 
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
+      // Sesión expiró → cerrar
+      if (login.sesion_activa) {
+        await client.query(
+          `UPDATE usuario_login
+           SET sesion_activa = FALSE, token = NULL, token_expires = NULL, inicio_sesion = NULL, fin_sesion = NULL
+           WHERE usuario_id = $1`,
+          [usuario.id]
+        );
+      }
     }
+
+    // Crear token nuevo
+    token = jwt.sign({ id: usuario.id, correo: usuario.correo, rol: usuario.rol }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const expiracionToken = new Date(Date.now() + 5 * 60000);
+
+    await client.query(
+      `UPDATE usuario_login
+       SET token = $1, token_expires = $2, sesion_activa = TRUE, inicio_sesion = NOW(), fin_sesion = $3
+       WHERE usuario_id = $4`,
+      [token, expiracionToken, expiracionToken, usuario.id]
+    );
+
+    await client.query('COMMIT');
 
     return res.json({
       mensaje: "Autenticación exitosa",
       token,
-      usuario: {
-        id: usuario.id,
-        correo: usuario.correo,
-        rol: usuario.rol,
-        nombre: usuario.nombre
-      },
+      usuario: { id: usuario.id, correo: usuario.correo, rol: usuario.rol, nombre: usuario.nombre },
       codigo: 0
     });
 
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error("Error verificarCodigo:", error);
-    return res.status(200).json(
-      errorResponse("ERROR_SERVIDOR", `Error al verificar código: ${error.message}`, null, 3)
-    );
+    return res.status(200).json(errorResponse("ERROR_SERVIDOR", `Error al verificar código: ${error.message}`, null, 3));
+  } finally {
+    client.release();
   }
 };
+
 
 
 
