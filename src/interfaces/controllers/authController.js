@@ -3,6 +3,7 @@ const RecuperarService = require('../../application/recuperarService');
 const AuthService = require('../../application/authService');
 const { obtenerUbicacionIP } = require('../../infrastructure/utils/geolocation');
 const bcrypt = require('bcrypt');
+const pool = require('../../infrastructure/db'); // Ajusta la ruta según tu proyecto
 const jwt = require('jsonwebtoken');
 const transporter = require('../../config/email');
 const { loginAttempt, isBlocked } = require("../middlewares/loginAttempts");
@@ -34,7 +35,6 @@ const loginUsuario = async (req, res) => {
     if (correo && correo.trim() === "") errores.push({ codigo: "VACIO_CORREO", mensaje: "Correo no puede estar vacío" });
     if (password && password.trim() === "") errores.push({ codigo: "VACIO_PASSWORD", mensaje: "Contraseña no puede estar vacía" });
 
-    // Validaciones de formato
     if (correo && !correoRegex.test(correo)) errores.push({ codigo: "CORREO_INVALIDO", mensaje: "El correo debe tener un formato válido, ejemplo: usuario@dominio.com" });
     if (password && !passwordRegex.test(password)) errores.push({ codigo: "PASSWORD_INVALIDA", mensaje: "La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" });
 
@@ -102,7 +102,6 @@ const verificarCodigo = async (req, res) => {
     const { correo, codigo } = req.body;
     let errores = [];
 
-    // --- Validaciones ---
     if (!correo) {
       errores.push(errorResponse("FALTA_CORREO", "El correo es requerido", null, 2).error);
     } else {
@@ -119,42 +118,73 @@ const verificarCodigo = async (req, res) => {
     }
 
     if (errores.length > 0) {
-      return res.status(200).json({
-        codigo: 2,
-        errores
-      });
+      return res.status(200).json({ codigo: 2, errores });
     }
 
     const correoSanitizado = correo.trim().toLowerCase();
-
     const usuario = await UsuarioService.buscarPorCorreo(correoSanitizado);
+
     if (!usuario) {
-      return res.status(200).json(
-        errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3)
-      );
+      return res.status(200).json(errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3));
     }
 
     const valido = await RecuperarService.validarCodigoReset(usuario.id, codigo);
     if (!valido) {
-      return res.status(200).json(
-        errorResponse("CODIGO_INVALIDO", "Código inválido o expirado", null, 2)
-      );
+      return res.status(200).json(errorResponse("CODIGO_INVALIDO", "Código inválido o expirado", null, 2));
     }
 
     await RecuperarService.limpiarCodigoReset(usuario.id);
 
-    const token = jwt.sign(
-      { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
-      process.env.JWT_SECRET,
-      { expiresIn: '5m' }
-    );
+    const client = await pool.connect();
+    let token;
+    let tiempo_restante_min = null;
 
-    const expiracionToken = new Date(Date.now() + 5 * 60000);
-    await UsuarioService.guardarToken(usuario.id, token, expiracionToken);
+    try {
+      await client.query('BEGIN');
+
+      const resLogin = await client.query(
+        `SELECT * FROM usuario_login WHERE usuario_id = $1 FOR UPDATE`,
+        [usuario.id]
+      );
+
+      const ahora = new Date();
+      if (resLogin.rows.length > 0) {
+        const login = resLogin.rows[0];
+
+        if (login.sesion_activa && login.fin_sesion && login.fin_sesion > ahora) {
+          token = login.token;
+          tiempo_restante_min = Math.ceil((new Date(login.fin_sesion) - ahora) / 60000);
+        } else {
+          token = jwt.sign(
+            { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
+            process.env.JWT_SECRET,
+            { expiresIn: '1h' }
+          );
+
+          const expiracionToken = new Date(Date.now() + 5 * 60000); // 5 min
+          await client.query(
+            `UPDATE usuario_login 
+             SET token = $1, token_expires = $2, sesion_activa = TRUE, inicio_sesion = NOW(), fin_sesion = $3
+             WHERE usuario_id = $4`,
+            [token, expiracionToken, expiracionToken, usuario.id]
+          );
+
+          tiempo_restante_min = 5; // minutos iniciales
+        }
+      }
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
 
     return res.json({
       mensaje: "Autenticación exitosa",
       token,
+      tiempo_restante_min,
       usuario: {
         id: usuario.id,
         correo: usuario.correo,
@@ -171,6 +201,9 @@ const verificarCodigo = async (req, res) => {
     );
   }
 };
+
+
+
 
 
 module.exports = {
