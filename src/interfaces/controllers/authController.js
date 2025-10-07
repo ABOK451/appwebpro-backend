@@ -96,20 +96,22 @@ const loginUsuario = (req, res) => {
       return res.status(200).json(errorResponse("ERROR_SERVIDOR", "Error al iniciar sesión", error.message, 3));
     });
 };
-
 const verificarCodigo = (req, res) => {
   const { correo, codigo } = req.body;
   const errores = [];
 
   if (!correo) errores.push(errorResponse("FALTA_CORREO", "El correo es requerido", null, 2).error);
-  else if (!correoRegex.test((correo || "").trim().toLowerCase())) errores.push(errorResponse("CORREO_INVALIDO", "El correo no tiene un formato válido", null, 2).error);
+  else if (!correoRegex.test((correo || "").trim().toLowerCase()))
+    errores.push(errorResponse("CORREO_INVALIDO", "El correo no tiene un formato válido", null, 2).error);
 
   if (!codigo) errores.push(errorResponse("FALTA_CODIGO", "El código es requerido", null, 2).error);
-  else if (!codigoRegex.test(codigo)) errores.push(errorResponse("CODIGO_INVALIDO", "El código debe ser numérico", null, 2).error);
+  else if (!codigoRegex.test(codigo))
+    errores.push(errorResponse("CODIGO_INVALIDO", "El código debe ser numérico", null, 2).error);
 
   if (errores.length > 0) return res.status(200).json({ codigo: 2, errores });
 
   const correoSanitizado = correo.trim().toLowerCase();
+
   UsuarioService.buscarPorCorreo(correoSanitizado)
     .then(usuario => {
       if (!usuario) return res.status(200).json(errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3));
@@ -120,43 +122,45 @@ const verificarCodigo = (req, res) => {
 
           return RecuperarService.limpiarCodigoReset(usuario.id)
             .then(() => pool.connect())
-            .then(client => {
-              return client.query('BEGIN')
-                .then(() => client.query(`SELECT * FROM usuario_login WHERE usuario_id = $1 FOR UPDATE`, [usuario.id]))
-                .then(resLogin => {
-                  const ahora = new Date();
-                  let token, tiempo_restante_min;
+            .then(async client => {
+              try {
+                await client.query('BEGIN');
 
-                  if (resLogin.rows.length > 0) {
-                    const login = resLogin.rows[0];
-                    if (login.sesion_activa && login.fin_sesion && login.fin_sesion > ahora) {
-                      token = login.token;
-                      tiempo_restante_min = Math.ceil((new Date(login.fin_sesion) - ahora) / 60000);
-                      return { client, token, tiempo_restante_min };
-                    } else {
-                      token = jwt.sign({ id: usuario.id, correo: usuario.correo, rol: usuario.rol }, process.env.JWT_SECRET, { expiresIn: '1h' });
-                      const expiracionToken = new Date(Date.now() + 5 * 60000);
-                      return client.query(
-                        `UPDATE usuario_login SET token = $1, token_expires = $2, sesion_activa = TRUE, inicio_sesion = NOW(), fin_sesion = $3 WHERE usuario_id = $4`,
-                        [token, expiracionToken, expiracionToken, usuario.id]
-                      ).then(() => {
-                        tiempo_restante_min = 5;
-                        return { client, token, tiempo_restante_min };
-                      });
-                    }
-                  } else return { client, token: null, tiempo_restante_min: null };
-                })
-                .then(({ client, token, tiempo_restante_min }) => client.query('COMMIT').then(() => client.release().then(() => ({ token, tiempo_restante_min }))))
-                .then(({ token, tiempo_restante_min }) => {
-                  res.json({
-                    mensaje: "Autenticación exitosa",
-                    token,
-                    tiempo_restante_min,
-                    usuario: { id: usuario.id, correo: usuario.correo, rol: usuario.rol, nombre: usuario.nombre },
-                    codigo: 0
-                  });
-                })
-                .catch(err => client.query('ROLLBACK').then(() => client.release()).then(() => { throw err; }));
+                const resLogin = await client.query(`SELECT * FROM usuario_login WHERE usuario_id = $1 FOR UPDATE`, [usuario.id]);
+                const ahora = new Date();
+                let token, tiempo_restante_min;
+
+                if (resLogin.rows.length > 0) {
+                  const login = resLogin.rows[0];
+                  if (login.sesion_activa && login.fin_sesion && login.fin_sesion > ahora) {
+                    token = login.token;
+                    tiempo_restante_min = Math.ceil((new Date(login.fin_sesion) - ahora) / 60000);
+                  } else {
+                    token = jwt.sign({ id: usuario.id, correo: usuario.correo, rol: usuario.rol }, process.env.JWT_SECRET, { expiresIn: '1h' });
+                    const expiracionToken = new Date(Date.now() + 5 * 60000);
+                    tiempo_restante_min = 5;
+                    await client.query(
+                      `UPDATE usuario_login SET token = $1, token_expires = $2, sesion_activa = TRUE, inicio_sesion = NOW(), fin_sesion = $3 WHERE usuario_id = $4`,
+                      [token, expiracionToken, expiracionToken, usuario.id]
+                    );
+                  }
+                }
+
+                await client.query('COMMIT');
+
+                return res.json({
+                  mensaje: "Autenticación exitosa",
+                  token,
+                  tiempo_restante_min,
+                  usuario: { id: usuario.id, correo: usuario.correo, rol: usuario.rol, nombre: usuario.nombre },
+                  codigo: 0
+                });
+              } catch (err) {
+                await client.query('ROLLBACK');
+                throw err;
+              } finally {
+                client.release();
+              }
             });
         });
     })
@@ -165,6 +169,7 @@ const verificarCodigo = (req, res) => {
       return res.status(200).json(errorResponse("ERROR_SERVIDOR", `Error al verificar código: ${error.message}`, null, 3));
     });
 };
+
 
 module.exports = {
   loginUsuario,
