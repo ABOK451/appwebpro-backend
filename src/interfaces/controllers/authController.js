@@ -35,7 +35,6 @@ const loginUsuario = async (req, res) => {
     if (correo && correo.trim() === "") errores.push({ codigo: "VACIO_CORREO", mensaje: "Correo no puede estar vacío" });
     if (password && password.trim() === "") errores.push({ codigo: "VACIO_PASSWORD", mensaje: "Contraseña no puede estar vacía" });
 
-    // Validaciones de formato
     if (correo && !correoRegex.test(correo)) errores.push({ codigo: "CORREO_INVALIDO", mensaje: "El correo debe tener un formato válido, ejemplo: usuario@dominio.com" });
     if (password && !passwordRegex.test(password)) errores.push({ codigo: "PASSWORD_INVALIDA", mensaje: "La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" });
 
@@ -103,7 +102,6 @@ const verificarCodigo = async (req, res) => {
     const { correo, codigo } = req.body;
     let errores = [];
 
-    // --- Validaciones ---
     if (!correo) {
       errores.push(errorResponse("FALTA_CORREO", "El correo es requerido", null, 2).error);
     } else {
@@ -137,9 +135,10 @@ const verificarCodigo = async (req, res) => {
 
     await RecuperarService.limpiarCodigoReset(usuario.id);
 
-    // --- Manejo de token con FOR UPDATE ---
     const client = await pool.connect();
     let token;
+    let tiempo_restante_min = null;
+
     try {
       await client.query('BEGIN');
 
@@ -153,23 +152,24 @@ const verificarCodigo = async (req, res) => {
         const login = resLogin.rows[0];
 
         if (login.sesion_activa && login.fin_sesion && login.fin_sesion > ahora) {
-          // Usar token existente
           token = login.token;
+          tiempo_restante_min = Math.ceil((new Date(login.fin_sesion) - ahora) / 60000);
         } else {
-          // Generar token nuevo
           token = jwt.sign(
             { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
             process.env.JWT_SECRET,
             { expiresIn: '1h' }
           );
 
-          const expiracionToken = new Date(Date.now() + 5 * 60000);
+          const expiracionToken = new Date(Date.now() + 5 * 60000); // 5 min
           await client.query(
             `UPDATE usuario_login 
              SET token = $1, token_expires = $2, sesion_activa = TRUE, inicio_sesion = NOW(), fin_sesion = $3
              WHERE usuario_id = $4`,
             [token, expiracionToken, expiracionToken, usuario.id]
           );
+
+          tiempo_restante_min = 5; // minutos iniciales
         }
       }
 
@@ -184,6 +184,7 @@ const verificarCodigo = async (req, res) => {
     return res.json({
       mensaje: "Autenticación exitosa",
       token,
+      tiempo_restante_min,
       usuario: {
         id: usuario.id,
         correo: usuario.correo,
@@ -200,6 +201,7 @@ const verificarCodigo = async (req, res) => {
     );
   }
 };
+
 
 
 

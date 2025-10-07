@@ -1,6 +1,5 @@
 const UsuarioService = require('../../application/usuarioService');
 const pool = require('../../infrastructure/db');
-
 const errorResponse = require('../../helpers/errorResponse');
 
 const verificarSesionActiva = async (req, res, next) => {
@@ -19,7 +18,6 @@ const verificarSesionActiva = async (req, res, next) => {
   try {
     await client.query('BEGIN');
 
-    // Bloquea la fila del usuario hasta que termine la transacción
     const usuarioRes = await client.query(
       `SELECT * FROM usuarios WHERE correo = $1 FOR UPDATE`,
       [correo]
@@ -44,14 +42,17 @@ const verificarSesionActiva = async (req, res, next) => {
     if (login && login.sesion_activa && login.fin_sesion > ahora) {
       await client.query('COMMIT');
       console.log("[verificarSesionActiva] Sesión sigue activa");
+
+      const tiempoRestanteMin = Math.ceil((new Date(login.fin_sesion) - ahora) / 60000); // minutos
+
       return res.status(200).json({
         mensaje: "Ya existe una sesión activa",
         codigo: 0,
-        token: login.token
+        token: login.token,
+        tiempo_restante_min: tiempoRestanteMin
       });
     }
 
-    // Si la sesión expiró o no hay, continuar
     console.log("[verificarSesionActiva] No hay sesión activa o expiró, continuando...");
     await client.query('COMMIT');
     next();
@@ -70,7 +71,7 @@ const verificarSesionActiva = async (req, res, next) => {
 
 const extenderSesion = async (req, res, next) => {
   try {
-    const token = req.headers['authorization']?.split(' ')[1]; // ejemplo Bearer
+    const token = req.headers['authorization']?.split(' ')[1]; 
     console.log("[extenderSesion] Authorization header:", req.headers['authorization']);
 
     if (!token) {
@@ -109,6 +110,16 @@ const extenderSesion = async (req, res, next) => {
       const nuevaFin = new Date(ahora.getTime() + 3 * 60000); // +3 min
       await UsuarioService.actualizarLogin(usuario.id, { fin_sesion: nuevaFin });
       console.log(`[extenderSesion] Sesión extendida hasta ${nuevaFin}`);
+
+      const tiempoRestanteMin = Math.ceil((nuevaFin - ahora) / 60000);
+
+      return res.status(200).json({
+        mensaje: "Sesión extendida",
+        codigo: 0,
+        token: usuario.token,
+        tiempo_restante_min: tiempoRestanteMin
+      });
+
     } else {
       // Sesión expirada → cerrar
       await UsuarioService.actualizarLogin(usuario.id, { 
@@ -126,10 +137,6 @@ const extenderSesion = async (req, res, next) => {
       });
     }
 
-    // Si todo bien, continuar
-    req.usuario = usuario;
-    next();
-
   } catch (err) {
     console.error("[extenderSesion] Error:", err);
     return res.status(200).json({ 
@@ -142,8 +149,5 @@ const extenderSesion = async (req, res, next) => {
     });
   }
 };
-
-
-
 
 module.exports = { verificarSesionActiva, extenderSesion };
