@@ -116,7 +116,7 @@ paths:
     put:
       tags:
         - Productos
-      summary: Actualizar un producto (por JSON)
+      summary: Actualizar un producto 
       security:
         - bearerAuth: []
       requestBody:
@@ -190,7 +190,7 @@ paths:
     delete:
       tags:
         - Productos
-      summary: Eliminar un producto (por JSON)
+      summary: Eliminar un producto 
       security:
         - bearerAuth: []
       requestBody:
