@@ -1,0 +1,236 @@
+openapi: 3.0.0
+info:
+  title: API de Productos
+  version: 1.0.0
+servers:
+  - url: https://localhost:3000
+
+tags:
+  - name: Productos
+    description: Operaciones relacionadas con productos
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Producto:
+      type: object
+      properties:
+        codigo:
+          type: string
+          example: "CAM123"
+        nombre:
+          type: string
+          example: "Camiseta"
+        descripcion:
+          type: string
+          example: "Camiseta de algodón"
+        cantidad:
+          type: integer
+          example: 10
+        stock:
+          type: integer
+          example: 5
+        precio:
+          type: number
+          format: float
+          example: 199.99
+        proveedor:
+          type: string
+          example: "Proveedor S.A."
+        id_categoria:
+          type: integer
+          example: 1
+        categoria_nombre:
+          type: string
+          example: "Ropa"
+        imagen:
+          type: string
+          example: "https://imagen.com/camiseta.png"
+        fecha_ingreso:
+          type: string
+          format: date-time
+          example: "2025-10-06T18:00:00Z"
+
+paths:
+  /productos/crear:
+    post:
+      tags:
+        - Productos
+      summary: Crear un nuevo producto
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Producto'
+      responses:
+        '200':
+          description: Producto creado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: integer
+                    example: 0
+                  mensaje:
+                    type: string
+                    example: "Producto registrado correctamente"
+                  producto:
+                    $ref: '#/components/schemas/Producto'
+
+  /productos/listar:
+    get:
+      tags:
+        - Productos
+      summary: Listar todos los productos
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de productos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: integer
+                    example: 0
+                  mensaje:
+                    type: string
+                    example: "Listado de productos"
+                  productos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Producto'
+
+  /productos/actualizar:
+    put:
+      tags:
+        - Productos
+      summary: Actualizar un producto 
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - codigo
+              properties:
+                codigo:
+                  type: string
+                  example: "CAM123"
+                nombre:
+                  type: string
+                  example: "Camiseta Nueva"
+                descripcion:
+                  type: string
+                  example: "Camiseta actualizada"
+                cantidad:
+                  type: integer
+                  example: 20
+                stock:
+                  type: integer
+                  example: 10
+                precio:
+                  type: number
+                  format: float
+                  example: 209.99
+                proveedor:
+                  type: string
+                  example: "Proveedor Actualizado"
+                id_categoria:
+                  type: integer
+                  example: 2
+                imagen:
+                  type: string
+                  example: "https://imagen.com/camiseta-nueva.png"
+      responses:
+        '200':
+          description: Producto actualizado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: integer
+                    example: 0
+                  mensaje:
+                    type: string
+                    example: "Producto actualizado correctamente"
+                  producto:
+                    $ref: '#/components/schemas/Producto'
+        '404':
+          description: Producto no encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: string
+                    example: "PRODUCTO_NO_EXISTE"
+                  mensaje:
+                    type: string
+                    example: "Producto no encontrado"
+
+  /productos/eliminar:
+    delete:
+      tags:
+        - Productos
+      summary: Eliminar un producto 
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - codigo
+              properties:
+                codigo:
+                  type: string
+                  example: "CAM123"
+      responses:
+        '200':
+          description: Producto eliminado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: integer
+                    example: 0
+                  mensaje:
+                    type: string
+                    example: "Producto eliminado correctamente"
+                  producto:
+                    $ref: '#/components/schemas/Producto'
+        '404':
+          description: Producto no encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: string
+                    example: "PRODUCTO_NO_EXISTE"
+                  mensaje:
+                    type: string
+                    example: "Producto no encontrado"

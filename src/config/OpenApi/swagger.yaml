@@ -5,6 +5,12 @@ info:
 servers:
   - url: https://localhost:3000
 
+tags:
+  - name: Usuarios
+    description: Operaciones relacionadas con usuarios
+  - name: Auth
+    description: Operaciones de autenticación y login
+
 components:
   securitySchemes:
     bearerAuth:
@@ -31,6 +37,8 @@ paths:
 
   /usuarios:
     get:
+      tags:
+        - Usuarios
       summary: Lista todos los usuarios
       security:
        - bearerAuth: []
@@ -71,6 +79,8 @@ paths:
 
   /usuarios/nuevo:
     post:
+      tags:
+        - Usuarios
       summary: Crear un nuevo usuario
       security:
        - bearerAuth: []
@@ -142,6 +152,8 @@ paths:
 
   /usuarios/actualizar:
     put:
+      tags:
+        - Usuarios
       summary: Actualizar un usuario por correo
       security:
        - bearerAuth: []
@@ -226,6 +238,8 @@ paths:
 
   /usuarios/eliminar:
     delete:
+      tags:
+        - Usuarios
       summary: Eliminar un usuario
       security:
        - bearerAuth: []
@@ -274,6 +288,8 @@ paths:
 
   /auth/login:
     post:
+      tags:
+        - Auth
       summary: Login de usuario
       requestBody:
         required: true
@@ -362,8 +378,11 @@ paths:
                     type: string
               example:
                 error: "Usuario no encontrado"
+  
   /auth/verificar-codigo:
     post:
+      tags:
+        - Auth
       summary: Verificación de código 2FA
       description: Verifica el código enviado al usuario tras el login (correo/SMS/app). Si es válido, devuelve el token JWT de acceso.
       requestBody:
@@ -452,6 +471,8 @@ paths:
 
   /recuperar/solicitar-reset:
     post:
+      tags:
+        - Auth
       summary: Solicitar código para restablecer contraseña
       description: Genera un código de verificación temporal que será enviado al correo del usuario.
       requestBody:
@@ -507,6 +528,8 @@ paths:
 
   /recuperar/reset-con-codigo:
     post:
+      tags:
+        - Auth
       summary: Restablecer contraseña con código
       description: Valida el código y actualiza la contraseña del usuario.
       requestBody:
@@ -568,6 +591,8 @@ paths:
                     example: "Usuario no encontrado"
   /admin:
     get:
+      tags:
+        - Auth
       summary: Acceso solo para administradores
       security:
         - bearerAuth: []
@@ -601,6 +626,8 @@ paths:
 
   /user:
     get:
+      tags:
+        - Auth
       summary: Acceso para usuarios y administradores
       security:
         - bearerAuth: []

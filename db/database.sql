@@ -33,4 +33,27 @@ ADD COLUMN inicio_sesion TIMESTAMP,             -- momento en que arrancó
 ADD COLUMN fin_sesion TIMESTAMP;                -- momento en que se cerró
 
 
+CREATE TABLE categorias (
+  id SERIAL PRIMARY KEY,
+  nombre VARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE productos (
+  id SERIAL PRIMARY KEY,
+  nombre VARCHAR(100) NOT NULL,
+  codigo VARCHAR(50) NOT NULL UNIQUE,
+  descripcion TEXT,
+  cantidad INT NOT NULL,
+  stock INT DEFAULT 0,
+  precio DECIMAL(10,2) NOT NULL,
+  proveedor VARCHAR(100),
+  id_categoria INT REFERENCES categorias(id) ON DELETE SET NULL,
+  imagen VARCHAR(255),
+  fecha_ingreso TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+
+
+
 
