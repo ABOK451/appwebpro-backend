@@ -14,9 +14,19 @@ const validarTelefono = (telefono) => {
 
 const listarUsuarios = (req, res) => {
   UsuarioService.listar()
-    .then(usuarios => res.json({ mensaje: "Usuarios listados con éxito", usuarios, codigo: 0 }))
+    .then(usuarios => {
+      res.json({
+        mensaje: "Usuarios listados con éxito",
+        codigo: 0,
+        token: req.tokenExtendido || null,
+        tiempo_restante_min: req.tiempoRestanteMin || null,
+        usuarios
+      });
+    })
     .catch(error => res.status(200).json(errorResponse("ERROR_LISTAR", "Error al listar usuarios", error.message, 3)));
 };
+
+
 
 const crearUsuario = (req, res) => {
   let { correo, password, rol, estado, nombre, app, apm, telefono } = req.body;

@@ -4,48 +4,57 @@ const Producto = require('../domain/producto');
 class ProductoService {
 
   // Crear producto
-  static crear({ nombre, codigo, descripcion, cantidad, stock, precio, proveedor, id_categoria, imagen }) {
-    return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])
-      .then(existente => {
-        if (existente.rows.length > 0) {
-          const error = new Error("Ya existe un producto con ese código");
-          error.codigo = "CODIGO_DUPLICADO";
-          throw error;
-        }
-        return pool.query(
-          `INSERT INTO productos 
-            (nombre, codigo, descripcion, cantidad, stock, precio, proveedor, id_categoria, imagen, fecha_ingreso)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-           RETURNING *`,
-          [
-            nombre.trim(),
-            codigo.trim(),
-            descripcion || null,
-            cantidad,
-            stock || 0,
-            precio,
-            proveedor || null,
-            id_categoria || null,
-            imagen || null,
-          ]
-        );
-      })
-      .then(resultado => {
-        const nuevo = resultado.rows[0];
-        return new Producto(
-          nuevo.codigo,
-          nuevo.nombre,
-          nuevo.descripcion,
-          nuevo.cantidad,
-          nuevo.stock,
-          nuevo.precio,
-          nuevo.proveedor,
-          nuevo.id_categoria,
-          nuevo.imagen,
-          nuevo.fecha_ingreso
-        );
-      });
-  }
+static crear({ nombre, codigo, descripcion, cantidad, stock, precio, proveedor, id_categoria, imagen }) {
+  return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])
+    .then(existente => {
+      if (existente.rows.length > 0) {
+        const error = new Error("Ya existe un producto con ese código");
+        error.codigo = "CODIGO_DUPLICADO";
+        throw error;
+      }
+
+      return pool.query(
+        `INSERT INTO productos 
+          (nombre, codigo, descripcion, cantidad, stock, precio, proveedor, id_categoria, imagen, fecha_ingreso)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+         RETURNING *`,
+        [
+          nombre.trim(),
+          codigo.trim(),
+          descripcion || null,
+          cantidad,
+          stock || 0,
+          precio,
+          proveedor || null,
+          id_categoria || null,
+          imagen || null
+        ]
+      );
+    })
+    .then(resultado => {
+      const nuevo = resultado.rows[0];
+
+      // Registrar en bitácora (registro inicial)
+      return pool.query(
+        `INSERT INTO bitacora (codigo_producto, tipo_movimiento, cantidad, descripcion)
+         VALUES ($1, 'registro_inicial', $2, 'Registro inicial del producto')`,
+        [nuevo.codigo, nuevo.cantidad]
+      ).then(() => nuevo);
+    })
+    .then(nuevo => new Producto(
+      nuevo.codigo,
+      nuevo.nombre,
+      nuevo.descripcion,
+      nuevo.cantidad,
+      nuevo.stock,
+      nuevo.precio,
+      nuevo.proveedor,
+      nuevo.id_categoria,
+      nuevo.imagen,
+      nuevo.fecha_ingreso
+    ));
+}
+
 
   // Listar todos los productos con su categoría
   static listar() {
@@ -86,6 +95,8 @@ class ProductoService {
           throw error;
         }
 
+        const productoAnterior = resultado.rows[0];
+
         return pool.query(
           `UPDATE productos SET
             nombre = $1,
@@ -109,26 +120,38 @@ class ProductoService {
             imagen || null,
             codigo
           ]
-        );
+        ).then(resultadoActualizado => {
+          const actualizado = resultadoActualizado.rows[0];
+
+          // Verificar diferencia en cantidad o stock
+          const diferencia = actualizado.cantidad - productoAnterior.cantidad;
+          if (diferencia !== 0) {
+            const tipo = diferencia > 0 ? 'entrada' : 'salida';
+            return pool.query(
+              `INSERT INTO bitacora (codigo_producto, tipo_movimiento, cantidad, descripcion)
+               VALUES ($1, $2, $3, 'Actualización de producto')`,
+              [codigo, tipo, Math.abs(diferencia)]
+            ).then(() => actualizado);
+          }
+
+          return actualizado;
+        });
       })
-      .then(resultado => {
-        const actualizado = resultado.rows[0];
-        return new Producto(
-          actualizado.codigo,
-          actualizado.nombre,
-          actualizado.descripcion,
-          actualizado.cantidad,
-          actualizado.stock,
-          actualizado.precio,
-          actualizado.proveedor,
-          actualizado.id_categoria,
-          actualizado.imagen,
-          actualizado.fecha_ingreso
-        );
-      });
+      .then(actualizado => new Producto(
+        actualizado.codigo,
+        actualizado.nombre,
+        actualizado.descripcion,
+        actualizado.cantidad,
+        actualizado.stock,
+        actualizado.precio,
+        actualizado.proveedor,
+        actualizado.id_categoria,
+        actualizado.imagen,
+        actualizado.fecha_ingreso
+      ));
   }
 
-  // Eliminar producto por código
+  // Eliminar producto
   static eliminar(codigo) {
     return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])
       .then(resultado => {
@@ -137,7 +160,18 @@ class ProductoService {
           error.codigo = "PRODUCTO_NO_EXISTE";
           throw error;
         }
-        return pool.query("DELETE FROM productos WHERE codigo = $1 RETURNING *", [codigo]);
+
+        const producto = resultado.rows[0];
+
+        return pool.query("DELETE FROM productos WHERE codigo = $1 RETURNING *", [codigo])
+          .then(resultadoDelete => {
+            // Registrar salida en bitácora
+            return pool.query(
+              `INSERT INTO bitacora (codigo_producto, tipo_movimiento, cantidad, descripcion)
+               VALUES ($1, 'salida', $2, 'Producto eliminado del inventario')`,
+              [producto.codigo, producto.cantidad]
+            ).then(() => resultadoDelete);
+          });
       })
       .then(resultado => {
         const eliminado = resultado.rows[0];

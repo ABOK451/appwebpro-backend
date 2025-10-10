@@ -52,6 +52,17 @@ CREATE TABLE productos (
   fecha_ingreso TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE bitacora (
+  id SERIAL PRIMARY KEY,
+  codigo_producto VARCHAR(50) NOT NULL REFERENCES productos(codigo) ON DELETE CASCADE,
+  tipo_movimiento VARCHAR(20) NOT NULL, -- 'entrada' o 'salida'
+  cantidad INT NOT NULL,
+  descripcion TEXT,
+  id_usuario INT, -- opcional
+  fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
 
 
 
