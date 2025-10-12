@@ -1,12 +1,14 @@
-openapi: 3.0.3
+openapi: "3.0.3"
 info:
   title: API de Bitácora de Inventario
   version: 1.0.0
   description: >
     API para registrar y consultar los movimientos de entrada, salida y registro inicial
     de productos en el inventario.
+
 servers:
   - url: http://localhost:3000
+
 tags:
   - name: Bitácora
     description: Operaciones relacionadas con la bitácora de inventario
