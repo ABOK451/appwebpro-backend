@@ -65,9 +65,15 @@ const swaggerDocument = {
     ...swaggerUsuarios.paths, 
     ...swaggerProductos.paths 
   },
-  components: { 
-    ...swaggerUsuarios.components, 
-    ...swaggerProductos.components 
+  components: {
+    securitySchemes: {
+      ...(swaggerUsuarios.components?.securitySchemes || {}),
+      ...(swaggerProductos.components?.securitySchemes || {}),
+    },
+    schemas: {
+      ...(swaggerUsuarios.components?.schemas || {}),
+      ...(swaggerProductos.components?.schemas || {}),
+    }
   }
 };
 
