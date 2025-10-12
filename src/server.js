@@ -68,7 +68,7 @@ const swaggerDocument = {
   paths: { 
     ...swaggerUsuarios.paths, 
     ...swaggerProductos.paths,
-    ...swaggerBitacora.paths ,
+    ...swaggerBitacora.paths,
     ...swaggerReporte.paths
   },
   components: { 
