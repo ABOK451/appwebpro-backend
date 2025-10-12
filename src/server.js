@@ -14,6 +14,7 @@ const loginRoutes = require("./interfaces/routes/loginRoutes");
 const rolesRoutes = require("./interfaces/routes/rolesRoutes");
 const productosRoutes = require("./interfaces/routes/productoRoutes");
 const invetarioRoutes = require("./interfaces/routes/inventarioRoutes");
+const reporteRoutes = require("./interfaces/routes/reporteRoutes");
 const errorResponse = require('./helpers/errorResponse'); 
 require("dotenv").config();
 
@@ -55,6 +56,7 @@ app.use(cors({
 const swaggerUsuarios = YAML.load("./src/config/OpenApi/swagger.yaml");
 const swaggerProductos = YAML.load("./src/config/OpenApi/swagger-productos.yaml");
 const swaggerBitacora = YAML.load("./src/config/OpenApi/swagger-bitacora.yaml");
+const swaggerReporte = YAML.load("./src/config/OpenApi/swagger-reporte.yaml");
 
 const swaggerDocument = {
   openapi: "3.0.0",
@@ -66,12 +68,14 @@ const swaggerDocument = {
   paths: { 
     ...swaggerUsuarios.paths, 
     ...swaggerProductos.paths,
-    ...swaggerBitacora.paths 
+    ...swaggerBitacora.paths ,
+    ...swaggerReporte.paths
   },
   components: { 
     ...swaggerUsuarios.components, 
     ...swaggerProductos.components,
-    ...swaggerBitacora.components
+    ...swaggerBitacora.components,
+    ...swaggerReporte.components
   }
 };
 
@@ -85,6 +89,8 @@ app.use("/", loginRoutes);
 app.use("/", rolesRoutes);
 app.use("/", productosRoutes);
 app.use("/", invetarioRoutes);
+app.use("/", reporteRoutes);
+
 
 // Certificados
 const certDir = "src/certs";

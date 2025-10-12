@@ -1,5 +1,6 @@
 const pool = require('../infrastructure/db');
 const Bitacora = require('../domain/bitacora');
+const InventarioReportService = require('../application/inventarioReporteService'); // ✅ IMPORTACIÓN
 
 class BitacoraService {
 
@@ -11,7 +12,30 @@ class BitacoraService {
        RETURNING *`,
       [id_producto, tipo_movimiento, cantidad, descripcion || null]
     )
-    .then(res => res.rows[0]);
+    .then(async (res) => {
+      const registro = res.rows[0];
+
+      try {
+        // ✅ Obtener el código del producto
+        const producto = await pool.query(
+          `SELECT codigo FROM productos WHERE id = $1`,
+          [id_producto]
+        );
+
+        if (producto.rows.length > 0) {
+          const codigo_producto = producto.rows[0].codigo;
+
+          // ✅ Recalcular stock automáticamente
+          await InventarioReportService.recalculateStockByCodigo(codigo_producto);
+        } else {
+          console.warn(`Producto con id ${id_producto} no encontrado, no se recalculó stock`);
+        }
+      } catch (err) {
+        console.error('Error al recalcular stock:', err);
+      }
+
+      return registro;
+    });
   }
 
   // Listar toda la bitácora
@@ -47,8 +71,11 @@ class BitacoraService {
 
   // Eliminar registro
   static eliminar({ id }) {
-    return pool.query(`DELETE FROM bitacora WHERE id = $1 RETURNING *`, [id])
-      .then(res => res.rows[0]);
+    return pool.query(
+      `DELETE FROM bitacora WHERE id = $1 RETURNING *`,
+      [id]
+    )
+    .then(res => res.rows[0]);
   }
 }
 

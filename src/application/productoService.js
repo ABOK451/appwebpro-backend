@@ -1,59 +1,71 @@
 const pool = require('../infrastructure/db');
 const Producto = require('../domain/producto');
+const InventarioReportService = require('../application/inventarioReporteService'); // ✅ IMPORTACIÓN
+
 
 class ProductoService {
 
   // Crear producto
-static crear({ nombre, codigo, descripcion, cantidad, stock, precio, proveedor, id_categoria, imagen }) {
-  return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])
-    .then(existente => {
-      if (existente.rows.length > 0) {
-        const error = new Error("Ya existe un producto con ese código");
-        error.codigo = "CODIGO_DUPLICADO";
-        throw error;
-      }
+  static crear({ nombre, codigo, descripcion, cantidad, stock, precio, proveedor, id_categoria, imagen }) {
+    return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])
+      .then(existente => {
+        if (existente.rows.length > 0) {
+          const error = new Error("Ya existe un producto con ese código");
+          error.codigo = "CODIGO_DUPLICADO";
+          throw error;
+        }
 
-      return pool.query(
-        `INSERT INTO productos 
-          (nombre, codigo, descripcion, cantidad, stock, precio, proveedor, id_categoria, imagen, fecha_ingreso)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-         RETURNING *`,
-        [
-          nombre.trim(),
-          codigo.trim(),
-          descripcion || null,
-          cantidad,
-          stock || 0,
-          precio,
-          proveedor || null,
-          id_categoria || null,
-          imagen || null
-        ]
-      );
-    })
-    .then(resultado => {
-      const nuevo = resultado.rows[0];
+        return pool.query(
+          `INSERT INTO productos 
+            (nombre, codigo, descripcion, cantidad, stock, precio, proveedor, id_categoria, imagen, fecha_ingreso)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+           RETURNING *`,
+          [
+            nombre.trim(),
+            codigo.trim(),
+            descripcion || null,
+            cantidad,
+            stock || 0,
+            precio,
+            proveedor || null,
+            id_categoria || null,
+            imagen || null
+          ]
+        );
+      })
+      .then(async resultado => {
+        const nuevo = resultado.rows[0];
 
-      // Registrar en bitácora (registro inicial)
-      return pool.query(
-        `INSERT INTO bitacora (codigo_producto, tipo_movimiento, cantidad, descripcion)
-         VALUES ($1, 'registro_inicial', $2, 'Registro inicial del producto')`,
-        [nuevo.codigo, nuevo.cantidad]
-      ).then(() => nuevo);
-    })
-    .then(nuevo => new Producto(
-      nuevo.codigo,
-      nuevo.nombre,
-      nuevo.descripcion,
-      nuevo.cantidad,
-      nuevo.stock,
-      nuevo.precio,
-      nuevo.proveedor,
-      nuevo.id_categoria,
-      nuevo.imagen,
-      nuevo.fecha_ingreso
-    ));
-}
+        // ✅ Registrar movimiento inicial en bitácora
+        await pool.query(
+          `INSERT INTO bitacora (codigo_producto, tipo_movimiento, cantidad, descripcion)
+           VALUES ($1, 'registro_inicial', $2, 'Registro inicial del producto')`,
+          [nuevo.codigo, nuevo.cantidad]
+        );
+
+        try {
+          // ✅ Recalcular stock automáticamente
+          await InventarioReportService.recalculateStockByCodigo(nuevo.codigo);
+        } catch (err) {
+          console.error('Error al recalcular stock:', err);
+        }
+
+        return nuevo;
+      })
+      .then(nuevo => new Producto(
+        nuevo.codigo,
+        nuevo.nombre,
+        nuevo.descripcion,
+        nuevo.cantidad,
+        nuevo.stock,
+        nuevo.precio,
+        nuevo.proveedor,
+        nuevo.id_categoria,
+        nuevo.imagen,
+        nuevo.fecha_ingreso
+      ));
+  }
+
 
 
   // Listar todos los productos con su categoría

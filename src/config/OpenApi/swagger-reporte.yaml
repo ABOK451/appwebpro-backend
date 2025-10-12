@@ -1,0 +1,179 @@
+openapi: 3.0.0
+info:
+  title: API de Reportes de Inventario
+  version: 1.0.0
+
+servers:
+  - url: https://localhost:3000
+
+tags:
+  - name: Reportes
+    description: Reportes, dashboards y recalculo de inventario
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RangoFechas:
+      type: object
+      properties:
+        fecha_inicio:
+          type: string
+          format: date
+          example: "2025-01-01"
+        fecha_fin:
+          type: string
+          format: date
+          example: "2025-01-31"
+      required:
+        - fecha_inicio
+        - fecha_fin
+
+    CodigoProducto:
+      type: object
+      properties:
+        codigo_producto:
+          type: string
+          example: "PROD-001"
+      required:
+        - codigo_producto
+
+    ExportRequest:
+      type: object
+      properties:
+        tipo:
+          type: string
+          enum: [pdf, excel]
+          example: pdf
+        reporte:
+          type: string
+          enum: [inventario, mas_vendidos, bajo_stock, movimientos]
+          example: inventario
+        parametros:
+          type: object
+      required:
+        - tipo
+        - reporte
+
+paths:
+
+  /reporte/inventario:
+    post:
+      tags:
+        - Reportes
+      summary: Reporte del inventario actual
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Reporte generado exitosamente
+
+  /reporte/mas-vendidos:
+    post:
+      tags:
+        - Reportes
+      summary: Productos más vendidos
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Reporte generado
+
+  /reporte/bajo-stock:
+    post:
+      tags:
+        - Reportes
+      summary: Productos con bajo stock
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Reporte generado
+
+  /reporte/movimientos-periodo:
+    post:
+      tags:
+        - Reportes
+      summary: Movimientos por rango de fechas
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RangoFechas'
+      responses:
+        200:
+          description: Reporte generado
+
+  /reporte/export:
+    post:
+      tags:
+        - Reportes
+      summary: Exportar reporte a PDF o Excel
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportRequest'
+      responses:
+        200:
+          description: Archivo generado
+
+  /reporte/dashboard/mas-vendidos:
+    post:
+      tags:
+        - Reportes
+      summary: Dashboard de productos más vendidos (gráfica)
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Datos del dashboard
+
+  /reporte/dashboard/valor-inventario:
+    post:
+      tags:
+        - Reportes
+      summary: Dashboard del valor total de inventario
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Datos del dashboard
+
+  /reporte/recalculate/all:
+    post:
+      tags:
+        - Reportes
+      summary: Recalcular stock de todos los productos
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Recalculo completado
+
+  /reporte/recalculate/by-codigo:
+    post:
+      tags:
+        - Reportes
+      summary: Recalcular stock por código de producto
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CodigoProducto'
+      responses:
+        200:
+          description: Stock recalculado
