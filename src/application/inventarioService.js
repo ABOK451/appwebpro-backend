@@ -4,7 +4,6 @@ const InventarioReportService = require('../application/inventarioReporteService
 
 class BitacoraService {
 
-// Registrar movimiento en bitácora
 static registrar({ id_producto, tipo_movimiento, cantidad, descripcion }) {
    {
     id_producto,
@@ -102,9 +101,8 @@ static registrar({ id_producto, tipo_movimiento, cantidad, descripcion }) {
 }
 
 
-  // Servicio actualizado
 static actualizar({ id, tipo_movimiento, cantidad, descripcion }) {
-  // 1️⃣ Obtener datos anteriores
+
   return pool.query(
     `SELECT id_producto, tipo_movimiento, cantidad
      FROM bitacora
