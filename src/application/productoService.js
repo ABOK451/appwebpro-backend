@@ -4,6 +4,13 @@ const Producto = require('../domain/producto');
 class ProductoService {
 
   // Crear producto
+  static validarCategoria(id_categoria) {
+    if (!id_categoria) return Promise.resolve(null);
+    return pool.query("SELECT * FROM categorias WHERE id = $1", [id_categoria])
+      .then(res => res.rows.length > 0 ? res.rows[0] : null);
+  }
+
+  // Crear producto
   static crear({ nombre, codigo, descripcion, cantidad, stock, precio, proveedor, id_categoria, imagen }) {
     return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])
       .then(existente => {
@@ -12,38 +19,46 @@ class ProductoService {
           error.codigo = "CODIGO_DUPLICADO";
           throw error;
         }
-        return pool.query(
-          `INSERT INTO productos 
+
+        return pool.query(`
+          INSERT INTO productos 
             (nombre, codigo, descripcion, cantidad, stock, precio, proveedor, id_categoria, imagen, fecha_ingreso)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-           RETURNING *`,
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+          RETURNING *`,
           [
             nombre.trim(),
             codigo.trim(),
             descripcion || null,
             cantidad,
-            stock || 0,
+            stock,
             precio,
             proveedor || null,
             id_categoria || null,
-            imagen || null,
+            imagen || null
           ]
         );
       })
       .then(resultado => {
         const nuevo = resultado.rows[0];
-        return new Producto(
-          nuevo.codigo,
-          nuevo.nombre,
-          nuevo.descripcion,
-          nuevo.cantidad,
-          nuevo.stock,
-          nuevo.precio,
-          nuevo.proveedor,
-          nuevo.id_categoria,
-          nuevo.imagen,
-          nuevo.fecha_ingreso
-        );
+        if (!nuevo.id_categoria) {
+          return new Producto(
+            nuevo.codigo, nuevo.nombre, nuevo.descripcion,
+            nuevo.cantidad, nuevo.stock, nuevo.precio,
+            nuevo.proveedor, nuevo.id_categoria,
+            nuevo.imagen, nuevo.fecha_ingreso, null
+          );
+        }
+
+        return pool.query("SELECT nombre FROM categorias WHERE id = $1", [nuevo.id_categoria])
+          .then(cat => {
+            const categoriaNombre = cat.rows.length > 0 ? cat.rows[0].nombre : null;
+            return new Producto(
+              nuevo.codigo, nuevo.nombre, nuevo.descripcion,
+              nuevo.cantidad, nuevo.stock, nuevo.precio,
+              nuevo.proveedor, nuevo.id_categoria,
+              nuevo.imagen, nuevo.fecha_ingreso, categoriaNombre
+            );
+          });
       });
   }
 
@@ -58,24 +73,22 @@ class ProductoService {
       ORDER BY p.fecha_ingreso DESC
     `)
     .then(resultado =>
-      resultado.rows.map(p =>
-        new Producto(
-          p.codigo,
-          p.nombre,
-          p.descripcion,
-          p.cantidad,
-          p.stock,
-          p.precio,
-          p.proveedor,
-          p.id_categoria,
-          p.imagen,
-          p.fecha_ingreso,
-          p.categoria_nombre
-        )
-      )
+      resultado.rows.map(p => new Producto(
+        p.codigo,
+        p.nombre,
+        p.descripcion,
+        p.cantidad,
+        p.stock,
+        p.precio,
+        p.proveedor,
+        p.id_categoria,
+        p.imagen,
+        p.fecha_ingreso,
+        p.categoria_nombre
+      ))
     );
   }
-
+  
   // Actualizar producto por código
   static actualizar(codigo, { nombre, descripcion, cantidad, stock, precio, proveedor, id_categoria, imagen }) {
     return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])
