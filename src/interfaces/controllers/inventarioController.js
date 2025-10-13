@@ -27,12 +27,24 @@ const BitacoraController = {
       errores.push({ campo: "cantidad", mensaje: "cantidad debe ser un número entero positivo" });
     }
 
-    if (descripcion && typeof descripcion !== 'string') {
-      errores.push({ campo: "descripcion", mensaje: "descripcion debe ser un texto" });
-    }
+    if (descripcion) {
+        if (typeof descripcion !== 'string') {
+          errores.push({ campo: "descripcion", mensaje: "descripcion debe ser un texto" });
+        } else {
+          // Permitir letras, números, espacios, acentos y puntuación común
+          const regexDescripcion = /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ.,;:()¿?!¡\s-]+$/;
+          if (!regexDescripcion.test(descripcion)) {
+            errores.push({
+              campo: "descripcion",
+              mensaje: "descripcion contiene caracteres no permitidos"
+            });
+          }
+        }
+      }
+
 
     if (errores.length > 0) {
-      return res.status(400).json(
+      return res.status(200).json(
         errorResponse("VALIDACION_DATOS", "Errores en los campos enviados", errores)
       );
     }
@@ -43,8 +55,8 @@ const BitacoraController = {
       cantidad: Number(cantidad), 
       descripcion 
     })
-      .then(data => res.status(201).json({ mensaje: "Registro agregado a bitácora", data }))
-      .catch(err => res.status(500).json(
+      .then(data => res.status(200).json({ mensaje: "Registro agregado a bitácora", data }))
+      .catch(err => res.status(200).json(
         errorResponse("ERROR_INTERNO", "Error al registrar en bitácora", err.message)
       ));
   },
@@ -53,7 +65,7 @@ const BitacoraController = {
   listar(req, res) {
     BitacoraService.listar()
       .then(data => res.status(200).json(data))
-      .catch(err => res.status(500).json(
+      .catch(err => res.status(200).json(
         errorResponse("ERROR_INTERNO", "Error al listar bitácora", err.message)
       ));
   },
@@ -77,12 +89,23 @@ const BitacoraController = {
       errores.push({ campo: "cantidad", mensaje: "cantidad debe ser un número entero positivo" });
     }
 
-    if (descripcion !== undefined && typeof descripcion !== 'string') {
-      errores.push({ campo: "descripcion", mensaje: "descripcion debe ser un texto" });
+    if (descripcion !== undefined) {
+      if (typeof descripcion !== 'string') {
+        errores.push({ campo: "descripcion", mensaje: "descripcion debe ser un texto" });
+      } else {
+        const regexDescripcion = /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ.,;:()¿?!¡\s-]+$/;
+        if (!regexDescripcion.test(descripcion)) {
+          errores.push({
+            campo: "descripcion",
+            mensaje: "descripcion contiene caracteres no permitidos"
+          });
+        }
+      }
     }
 
+
     if (errores.length > 0) {
-      return res.status(400).json(
+      return res.status(200).json(
         errorResponse("VALIDACION_DATOS", "Errores en los campos enviados", errores)
       );
     }
@@ -95,13 +118,13 @@ const BitacoraController = {
     })
       .then(data => {
         if (!data) {
-          return res.status(404).json(
+          return res.status(200).json(
             errorResponse("NO_ENCONTRADO", "Registro no encontrado")
           );
         }
         res.status(200).json({ mensaje: "Registro actualizado", data });
       })
-      .catch(err => res.status(500).json(
+      .catch(err => res.status(200).json(
         errorResponse("ERROR_INTERNO", "Error al actualizar bitácora", err.message)
       ));
   },
@@ -118,7 +141,7 @@ const BitacoraController = {
     }
 
     if (errores.length > 0) {
-      return res.status(400).json(
+      return res.status(200).json(
         errorResponse("VALIDACION_DATOS", "Errores en los campos enviados", errores)
       );
     }
@@ -126,13 +149,26 @@ const BitacoraController = {
     BitacoraService.eliminar({ id: Number(id) })
       .then(data => {
         if (!data) {
-          return res.status(404).json(
+          return res.status(200).json(
             errorResponse("NO_ENCONTRADO", "Registro no encontrado")
           );
         }
-        res.status(200).json({ mensaje: "Registro eliminado", data });
+        // ejemplo de data devuelta
+        res.status(200).json({
+          mensaje: "Registro eliminado",
+          data: {
+            id: data.id,
+            codigo_producto: data.codigo_producto,
+            tipo_movimiento: data.tipo_movimiento,
+            cantidad: data.cantidad,
+            descripcion: data.descripcion,
+            id_usuario: data.id_usuario,
+            fecha: data.fecha
+          }
+        });
+
       })
-      .catch(err => res.status(500).json(
+      .catch(err => res.status(200).json(
         errorResponse("ERROR_INTERNO", "Error al eliminar registro", err.message)
       ));
   }

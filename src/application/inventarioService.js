@@ -27,7 +27,7 @@ class BitacoraService {
       nuevoStock = stock_actual - cantidad;
     }
 
-    // 1. Insertar en bitácora usando solo codigo_producto
+    // ✅ Insert solo con codigo_producto
     return pool.query(
       `INSERT INTO bitacora (codigo_producto, tipo_movimiento, cantidad, descripcion, fecha)
        VALUES ($1, $2, $3, $4, NOW())
@@ -40,7 +40,7 @@ class BitacoraService {
       ]
     )
     .then(bitacoraRes => {
-      // 2. Actualizar cantidad/stock en productos
+      // ✅ Actualizar stock por código
       return pool.query(
         `UPDATE productos
          SET cantidad = $1
@@ -55,36 +55,81 @@ class BitacoraService {
 
 
 
-  // Listar toda la bitácora
-  static listar() {
-    return pool.query(`
-      SELECT b.*, p.nombre AS producto_nombre, p.codigo
-      FROM bitacora b
-      LEFT JOIN productos p ON b.id_producto = p.id
-      ORDER BY b.fecha DESC
-    `)
-    .then(res => res.rows.map(row => new Bitacora(
-      row.id_producto,
-      row.tipo_movimiento,
-      row.cantidad,
-      row.descripcion,
-      row.fecha
-    )));
-  }
 
-  // Actualizar un registro de bitácora (por body)
-  static actualizar({ id, tipo_movimiento, cantidad, descripcion }) {
+  static listar() {
+  return pool.query(`
+    SELECT 
+      b.id,
+      b.codigo_producto,
+      b.tipo_movimiento,
+      b.cantidad,
+      b.descripcion,
+      b.id_usuario,
+      b.fecha,
+      p.nombre AS producto_nombre
+    FROM bitacora b
+    LEFT JOIN productos p ON b.codigo_producto = p.codigo
+    ORDER BY b.fecha DESC
+  `)
+  .then(res => res.rows.map(row => new Bitacora(
+    row.id,
+    row.codigo_producto,
+    row.tipo_movimiento,
+    row.cantidad,
+    row.descripcion,
+    row.id_usuario,
+    row.fecha
+  )));
+}
+
+
+  // Servicio actualizado
+static actualizar({ id, tipo_movimiento, cantidad, descripcion }) {
+  // 1️⃣ Obtener datos anteriores
+  return pool.query(
+    `SELECT id_producto, tipo_movimiento, cantidad
+     FROM bitacora
+     WHERE id = $1`,
+    [id]
+  )
+  .then(res => {
+    const registroAnterior = res.rows[0];
+    if (!registroAnterior) return null;
+
+    const { id_producto, tipo_movimiento: tipoAntes, cantidad: cantidadAntes } = registroAnterior;
+
+    const nuevaCantidad = cantidad !== undefined ? cantidad : cantidadAntes;
+    const nuevoTipo = tipo_movimiento || tipoAntes;
+
+    let diferencia = 0;
+
+    if (tipoAntes === "salida" && nuevoTipo === "salida") {
+      diferencia = cantidadAntes - nuevaCantidad;  // salida corregida
+    } else if (tipoAntes === "entrada" && nuevoTipo === "entrada") {
+      diferencia = nuevaCantidad - cantidadAntes;  // entrada corregida
+    }
+
     return pool.query(
-      `UPDATE bitacora
-       SET tipo_movimiento = $1,
-           cantidad = $2,
-           descripcion = $3
-       WHERE id = $4
+      `UPDATE productos
+       SET cantidad = cantidad + $1
+       WHERE id = $2
        RETURNING *`,
-      [tipo_movimiento, cantidad, descripcion || null, id]
+      [diferencia, id_producto]
     )
-    .then(res => res.rows[0]);
-  }
+    .then(() => {
+      return pool.query(
+        `UPDATE bitacora
+         SET tipo_movimiento = $1,
+             cantidad = $2,
+             descripcion = $3
+         WHERE id = $4
+         RETURNING *`,
+        [nuevoTipo, nuevaCantidad, descripcion || null, id]
+      ).then(r => r.rows[0]);
+    });
+  })
+}
+
 
   // Eliminar registro
   static eliminar({ id }) {
