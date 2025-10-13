@@ -4,8 +4,12 @@ const InventarioReportService = require('../application/inventarioReporteService
 
 
 class ProductoService {
+  static validarCategoria(id_categoria) {
+    if (!id_categoria) return Promise.resolve(null);
+    return pool.query("SELECT * FROM categorias WHERE id = $1", [id_categoria])
+      .then(res => res.rows.length > 0 ? res.rows[0] : null);
+  }
 
-  // Crear producto
   static crear({ nombre, codigo, descripcion, cantidad, stock, precio, proveedor, id_categoria, imagen }) {
     return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])
       .then(existente => {
@@ -71,37 +75,33 @@ class ProductoService {
   // Listar todos los productos con su categoría
   static listar() {
     return pool.query(`
-      SELECT 
-        p.*, 
-        c.nombre AS categoria_nombre
+      SELECT p.*, c.nombre AS categoria_nombre
       FROM productos p
       LEFT JOIN categorias c ON p.id_categoria = c.id
       ORDER BY p.fecha_ingreso DESC
-    `)
-    .then(resultado =>
-      resultado.rows.map(p =>
-        new Producto(
-          p.codigo,
-          p.nombre,
-          p.descripcion,
-          p.cantidad,
-          p.stock,
-          p.precio,
-          p.proveedor,
-          p.id_categoria,
-          p.imagen,
-          p.fecha_ingreso,
-          p.categoria_nombre
-        )
-      )
-    );
+    `).then(r => r.rows);
   }
 
-  // Actualizar producto por código
-  static actualizar(codigo, { nombre, descripcion, cantidad, stock, precio, proveedor, id_categoria, imagen }) {
+  static listarPorCampo(campo, valor) {
+    let query;
+    switch (campo) {
+      case 'nombre': query = "WHERE LOWER(p.nombre) LIKE LOWER($1)"; break;
+      case 'categoria': query = "WHERE LOWER(c.nombre) LIKE LOWER($1)"; break;
+      case 'proveedor': query = "WHERE LOWER(p.proveedor) LIKE LOWER($1)"; break;
+      default: return Promise.resolve([]);
+    }
+    return pool.query(`
+      SELECT p.*, c.nombre AS categoria_nombre
+      FROM productos p
+      LEFT JOIN categorias c ON p.id_categoria = c.id
+      ${query}`, [`%${valor}%`]
+    ).then(r => r.rows);
+  }
+
+  static actualizar(codigo, datos) {
     return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])
-      .then(resultado => {
-        if (resultado.rows.length === 0) {
+      .then(r => {
+        if (r.rows.length === 0) {
           const error = new Error("Producto no encontrado");
           error.codigo = "PRODUCTO_NO_EXISTE";
           throw error;
@@ -166,8 +166,8 @@ class ProductoService {
   // Eliminar producto
   static eliminar(codigo) {
     return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])
-      .then(resultado => {
-        if (resultado.rows.length === 0) {
+      .then(r => {
+        if (r.rows.length === 0) {
           const error = new Error("Producto no encontrado");
           error.codigo = "PRODUCTO_NO_EXISTE";
           throw error;
@@ -185,21 +185,7 @@ class ProductoService {
             ).then(() => resultadoDelete);
           });
       })
-      .then(resultado => {
-        const eliminado = resultado.rows[0];
-        return new Producto(
-          eliminado.codigo,
-          eliminado.nombre,
-          eliminado.descripcion,
-          eliminado.cantidad,
-          eliminado.stock,
-          eliminado.precio,
-          eliminado.proveedor,
-          eliminado.id_categoria,
-          eliminado.imagen,
-          eliminado.fecha_ingreso
-        );
-      });
+      .then(r => r.rows[0]);
   }
 }
 
