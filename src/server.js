@@ -19,21 +19,33 @@ require("dotenv").config();
 const app = express();
 
 // Middleware para JSON
+// Middleware para JSON
 app.use(express.json({
-  verify: (req, res, buf) => {
+  verify: (req, res, buf, encoding) => {
     try {
-      JSON.parse(buf);
+      if (buf && buf.length) {
+        JSON.parse(buf.toString(encoding || 'utf8'));
+      }
     } catch (e) {
-      res.status(200).json(errorResponse(
-        "JSON_INVALIDO",
-        "El cuerpo de la petición no es un JSON válido",
-        e.message,
-        1
-      ));
-      throw new Error("JSON inválido"); 
+      // Marcamos el request con un flag para manejarlo después
+      req.invalidJson = true;
     }
   }
 }));
+
+// Middleware para detectar JSON inválido
+app.use((req, res, next) => {
+  if (req.invalidJson) {
+    return res.status(400).json(errorResponse(
+      "JSON_INVALIDO",
+      "El cuerpo de la petición no es un JSON válido",
+      null,
+      1
+    ));
+  }
+  next();
+});
+
 
 app.use(express.urlencoded({ extended: true }));
 
