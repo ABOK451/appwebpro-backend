@@ -6,37 +6,35 @@ class BitacoraService {
 
   // Registrar movimiento en bitácora
   static registrar({ id_producto, tipo_movimiento, cantidad, descripcion }) {
+  // 1. Consultar el código del producto a partir del id
+  return pool.query(
+    `SELECT codigo FROM productos WHERE id = $1`,
+    [id_producto]
+  )
+  .then(productoRes => {
+    if (productoRes.rows.length === 0) {
+      throw new Error("El producto no existe");
+    }
+
+    const codigo_producto = productoRes.rows[0].codigo;
+
+    // 2. Insertar en bitácora usando id_producto y codigo_producto
     return pool.query(
-      `INSERT INTO bitacora (id_producto, tipo_movimiento, cantidad, descripcion, fecha)
-       VALUES ($1, $2, $3, $4, NOW())
+      `INSERT INTO bitacora (id_producto, codigo_producto, tipo_movimiento, cantidad, descripcion, fecha)
+       VALUES ($1, $2, $3, $4, $5, NOW())
        RETURNING *`,
-      [id_producto, tipo_movimiento, cantidad, descripcion || null]
-    )
-    .then(async (res) => {
-      const registro = res.rows[0];
+      [
+        id_producto,
+        codigo_producto,
+        tipo_movimiento,
+        cantidad,
+        descripcion || null
+      ]
+    );
+  })
+  .then(res => res.rows[0]);
+}
 
-      try {
-        // ✅ Obtener el código del producto
-        const producto = await pool.query(
-          `SELECT codigo FROM productos WHERE id = $1`,
-          [id_producto]
-        );
-
-        if (producto.rows.length > 0) {
-          const codigo_producto = producto.rows[0].codigo;
-
-          // ✅ Recalcular stock automáticamente
-          await InventarioReportService.recalculateStockByCodigo(codigo_producto);
-        } else {
-          console.warn(`Producto con id ${id_producto} no encontrado, no se recalculó stock`);
-        }
-      } catch (err) {
-        console.error('Error al recalcular stock:', err);
-      }
-
-      return registro;
-    });
-  }
 
   // Listar toda la bitácora
   static listar() {
