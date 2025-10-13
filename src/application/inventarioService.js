@@ -6,9 +6,8 @@ class BitacoraService {
 
   // Registrar movimiento en bitácora
   static registrar({ id_producto, tipo_movimiento, cantidad, descripcion }) {
-  // 1. Consultar el código del producto a partir del id
   return pool.query(
-    `SELECT codigo FROM productos WHERE id = $1`,
+    `SELECT codigo, cantidad AS stock_actual FROM productos WHERE id = $1`,
     [id_producto]
   )
   .then(productoRes => {
@@ -16,24 +15,44 @@ class BitacoraService {
       throw new Error("El producto no existe");
     }
 
-    const codigo_producto = productoRes.rows[0].codigo;
+    const { codigo: codigo_producto, stock_actual } = productoRes.rows[0];
+    let nuevoStock = stock_actual;
 
-    // 2. Insertar en bitácora usando id_producto y codigo_producto
+    if (tipo_movimiento === 'entrada') {
+      nuevoStock = stock_actual + cantidad;
+    } else if (tipo_movimiento === 'salida') {
+      if (cantidad > stock_actual) {
+        throw new Error("No hay suficiente stock para realizar la salida");
+      }
+      nuevoStock = stock_actual - cantidad;
+    }
+
+    // 1. Insertar en bitácora usando solo codigo_producto
     return pool.query(
-      `INSERT INTO bitacora (id_producto, codigo_producto, tipo_movimiento, cantidad, descripcion, fecha)
-       VALUES ($1, $2, $3, $4, $5, NOW())
+      `INSERT INTO bitacora (codigo_producto, tipo_movimiento, cantidad, descripcion, fecha)
+       VALUES ($1, $2, $3, $4, NOW())
        RETURNING *`,
       [
-        id_producto,
         codigo_producto,
         tipo_movimiento,
         cantidad,
         descripcion || null
       ]
-    );
-  })
-  .then(res => res.rows[0]);
+    )
+    .then(bitacoraRes => {
+      // 2. Actualizar cantidad/stock en productos
+      return pool.query(
+        `UPDATE productos
+         SET cantidad = $1
+         WHERE codigo = $2
+         RETURNING *`,
+        [nuevoStock, codigo_producto]
+      )
+      .then(() => bitacoraRes.rows[0]);
+    });
+  });
 }
+
 
 
   // Listar toda la bitácora
