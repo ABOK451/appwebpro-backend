@@ -27,7 +27,7 @@ components:
         id:
           type: integer
           example: 1
-        id_producto:
+        codigo_producto:
           type: integer
           example: 2
         tipo_movimiento:
@@ -63,8 +63,8 @@ paths:
                 - tipo_movimiento
                 - cantidad
               properties:
-                id_producto:
-                  type: integer
+                codigo_producto:
+                  type: text
                   example: 1
                 tipo_movimiento:
                   type: string

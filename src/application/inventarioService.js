@@ -4,18 +4,27 @@ const InventarioReportService = require('../application/inventarioReporteService
 
 class BitacoraService {
 
-  // Registrar movimiento en bitácora
-  static registrar({ id_producto, tipo_movimiento, cantidad, descripcion }) {
+// Registrar movimiento en bitácora
+static registrar({ id_producto, tipo_movimiento, cantidad, descripcion }) {
+   {
+    id_producto,
+    tipo_movimiento,
+    cantidad,
+    descripcion
+  };
+
   return pool.query(
-    `SELECT codigo, cantidad AS stock_actual FROM productos WHERE id = $1`,
+    `SELECT codigo, cantidad AS stock_actual FROM productos WHERE codigo = $1`,
     [id_producto]
   )
   .then(productoRes => {
+
     if (productoRes.rows.length === 0) {
       throw new Error("El producto no existe");
     }
 
     const { codigo: codigo_producto, stock_actual } = productoRes.rows[0];
+
     let nuevoStock = stock_actual;
 
     if (tipo_movimiento === 'entrada') {
@@ -25,9 +34,11 @@ class BitacoraService {
         throw new Error("No hay suficiente stock para realizar la salida");
       }
       nuevoStock = stock_actual - cantidad;
+    } else {
+      throw new Error("El tipo de movimiento debe ser 'entrada' o 'salida'");
     }
 
-    // ✅ Insert solo con codigo_producto
+
     return pool.query(
       `INSERT INTO bitacora (codigo_producto, tipo_movimiento, cantidad, descripcion, fecha)
        VALUES ($1, $2, $3, $4, NOW())
@@ -40,7 +51,7 @@ class BitacoraService {
       ]
     )
     .then(bitacoraRes => {
-      // ✅ Actualizar stock por código
+
       return pool.query(
         `UPDATE productos
          SET cantidad = $1
@@ -48,10 +59,18 @@ class BitacoraService {
          RETURNING *`,
         [nuevoStock, codigo_producto]
       )
-      .then(() => bitacoraRes.rows[0]);
+      .then(updateRes => {
+        return bitacoraRes.rows[0];
+      });
     });
+  })
+  .catch(error => {
+    throw error;
   });
 }
+
+
+
 
 
 

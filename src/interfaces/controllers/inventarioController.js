@@ -4,62 +4,63 @@ const errorResponse = require('../../helpers/errorResponse');
 const BitacoraController = {
 
   // Crear registro
-  crear(req, res) {
-    const { id_producto, tipo_movimiento, cantidad, descripcion } = req.body;
-    const errores = [];
+crear(req, res) {
+  const { id_producto, tipo_movimiento, cantidad, descripcion } = req.body;
+  const errores = [];
 
-    // Validaciones de formato y obligatoriedad
-    if (id_producto === undefined || id_producto === null) {
-      errores.push({ campo: "id_producto", mensaje: "El campo id_producto es obligatorio" });
-    } else if (isNaN(id_producto) || Number(id_producto) <= 0) {
-      errores.push({ campo: "id_producto", mensaje: "id_producto debe ser un número entero positivo" });
-    }
+  if (!id_producto) {
+    errores.push({ campo: "id_producto", mensaje: "El campo id_producto es obligatorio" });
+  } else if (typeof id_producto !== 'string') {
+    errores.push({ campo: "id_producto", mensaje: "id_producto debe ser un texto válido (código de producto)" });
+  }
 
-    if (!tipo_movimiento) {
-      errores.push({ campo: "tipo_movimiento", mensaje: "El campo tipo_movimiento es obligatorio" });
-    } else if (!['entrada', 'salida'].includes(tipo_movimiento)) {
-      errores.push({ campo: "tipo_movimiento", mensaje: "tipo_movimiento debe ser 'entrada' o 'salida'" });
-    }
+  // Validación tipo_movimiento
+  if (!tipo_movimiento) {
+    errores.push({ campo: "tipo_movimiento", mensaje: "El campo tipo_movimiento es obligatorio" });
+  } else if (!['entrada', 'salida'].includes(tipo_movimiento)) {
+    errores.push({ campo: "tipo_movimiento", mensaje: "tipo_movimiento debe ser 'entrada' o 'salida'" });
+  }
 
-    if (cantidad === undefined || cantidad === null) {
-      errores.push({ campo: "cantidad", mensaje: "El campo cantidad es obligatorio" });
-    } else if (isNaN(cantidad) || Number(cantidad) <= 0) {
-      errores.push({ campo: "cantidad", mensaje: "cantidad debe ser un número entero positivo" });
-    }
+  // Validación cantidad
+  if (cantidad === undefined || cantidad === null) {
+    errores.push({ campo: "cantidad", mensaje: "El campo cantidad es obligatorio" });
+  } else if (isNaN(cantidad) || Number(cantidad) <= 0) {
+    errores.push({ campo: "cantidad", mensaje: "cantidad debe ser un número entero positivo" });
+  }
 
-    if (descripcion) {
-        if (typeof descripcion !== 'string') {
-          errores.push({ campo: "descripcion", mensaje: "descripcion debe ser un texto" });
-        } else {
-          // Permitir letras, números, espacios, acentos y puntuación común
-          const regexDescripcion = /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ.,;:()¿?!¡\s-]+$/;
-          if (!regexDescripcion.test(descripcion)) {
-            errores.push({
-              campo: "descripcion",
-              mensaje: "descripcion contiene caracteres no permitidos"
-            });
-          }
-        }
+  // Validación descripcion
+  if (descripcion) {
+    if (typeof descripcion !== 'string') {
+      errores.push({ campo: "descripcion", mensaje: "descripcion debe ser un texto" });
+    } else {
+      const regexDescripcion = /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ.,;:()¿?!¡\s-]+$/;
+      if (!regexDescripcion.test(descripcion)) {
+        errores.push({
+          campo: "descripcion",
+          mensaje: "descripcion contiene caracteres no permitidos"
+        });
       }
-
-
-    if (errores.length > 0) {
-      return res.status(200).json(
-        errorResponse("VALIDACION_DATOS", "Errores en los campos enviados", errores)
-      );
     }
+  }
 
-    BitacoraService.registrar({ 
-      id_producto: Number(id_producto), 
-      tipo_movimiento, 
-      cantidad: Number(cantidad), 
-      descripcion 
-    })
-      .then(data => res.status(200).json({ mensaje: "Registro agregado a bitácora", data }))
-      .catch(err => res.status(200).json(
-        errorResponse("ERROR_INTERNO", "Error al registrar en bitácora", err.message)
-      ));
-  },
+  if (errores.length > 0) {
+    return res.status(200).json(
+      errorResponse("VALIDACION_DATOS", "Errores en los campos enviados", errores)
+    );
+  }
+
+  BitacoraService.registrar({ 
+    id_producto, 
+    tipo_movimiento, 
+    cantidad: Number(cantidad), 
+    descripcion 
+  })
+  .then(data => res.status(200).json({ mensaje: "Registro agregado a bitácora", data }))
+  .catch(err => res.status(200).json(
+    errorResponse("ERROR_INTERNO", "Error al registrar en bitácora", err.message)
+  ));
+},
+
 
   // Listar todos
   listar(req, res) {
