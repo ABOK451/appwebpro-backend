@@ -13,6 +13,7 @@ const recuperarRoutes = require("./interfaces/routes/recuperarRoutes");
 const loginRoutes = require("./interfaces/routes/loginRoutes");
 const rolesRoutes = require("./interfaces/routes/rolesRoutes");
 const productosRoutes = require("./interfaces/routes/productoRoutes");
+const categoriaRoutes = require("./interfaces/routes/categoriaRoutes");
 const errorResponse = require('./helpers/errorResponse'); 
 require("dotenv").config();
 
@@ -98,6 +99,8 @@ app.use("/", recuperarRoutes);
 app.use("/", loginRoutes);
 app.use("/", rolesRoutes);
 app.use("/", productosRoutes);
+app.use("/", categoriaRoutes);
+
 
 // Certificados
 const certDir = "src/certs";
