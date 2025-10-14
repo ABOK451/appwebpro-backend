@@ -52,6 +52,22 @@ CREATE TABLE productos (
   fecha_ingreso TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+INSERT INTO categorias (nombre) VALUES
+('Ropa'),
+('Calzado'),
+('Accesorios'),
+('Electrónica'),
+('Hogar'),
+('Belleza'),
+('Deportes'),
+('Juguetes'),
+('Papelería'),
+('Alimentos'),
+('Herramientas'),
+('Muebles'),
+('Limpieza'),
+('Oficina'),
+('Otros');
 
 
 
