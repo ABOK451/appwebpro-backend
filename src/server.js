@@ -71,24 +71,32 @@ const swaggerBitacora = YAML.load("./src/config/OpenApi/swagger-bitacora.yaml");
 const swaggerReporte = YAML.load("./src/config/OpenApi/swagger-reporte.yaml");
 
 const swaggerDocument = {
-  openapi: "3.0.0",
-  info: {
-    title: "API Completa",
-    version: "1.0.0"
-  },
-  servers: swaggerUsuarios.servers || [],
-  paths: { 
-    ...swaggerUsuarios.paths, 
-    ...swaggerProductos.paths,
-    ...swaggerBitacora.paths,
-    ...swaggerReporte.paths
-  },
-  components: { 
-    ...swaggerUsuarios.components, 
-    ...swaggerProductos.components,
-    ...swaggerBitacora.components,
-    ...swaggerReporte.components
-  }
+    openapi: "3.0.0",
+    info: {
+        title: "API Completa",
+        version: "1.0.0"
+    },
+    servers: swaggerUsuarios.servers || [],
+    paths: {
+        ...swaggerUsuarios.paths,
+        ...swaggerProductos.paths,
+        ...swaggerBitacora.paths,
+        ...swaggerReporte.paths
+    },
+    components: {
+        securitySchemes: {
+            ...(swaggerUsuarios.components.securitySchemes || {}),
+            ...(swaggerProductos.components.securitySchemes || {}),
+            ...(swaggerBitacora.components.securitySchemes || {}),
+            ...(swaggerReporte.components.securitySchemes || {}),
+        },
+        schemas: {
+            ...(swaggerUsuarios.components.schemas || {}),
+            ...(swaggerProductos.components.schemas || {}),
+            ...(swaggerBitacora.components.schemas || {}),
+            ...(swaggerReporte.components.schemas || {}),
+        }
+    }
 };
 
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
