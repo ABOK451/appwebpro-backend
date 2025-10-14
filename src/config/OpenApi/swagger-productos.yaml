@@ -54,6 +54,18 @@ components:
           type: string
           format: date-time
           example: "2025-10-06T18:00:00Z"
+    Categoria:   # <-- Agrega esto aquí
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        nombre:
+          type: string
+          example: "Electrónica"
+      required:
+        - id
+        - nombre
 
 paths:
   /productos/crear:

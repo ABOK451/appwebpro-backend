@@ -1,7 +1,8 @@
 const pool = require('../infrastructure/db');
 const Producto = require('../domain/producto');
-const InventarioReportService = require('../application/inventarioReporteService'); // ✅ IMPORTACIÓN
-
+const InventarioReportService = require('../application/inventarioReporteService');
+const { formatDate } = require('../utils/dateUtils'); // ✅ utils de fecha
+const { LOW_STOCK_THRESHOLD } = require('../config/constants'); // ✅ constante de bajo stock
 
 class ProductoService {
   static validarCategoria(id_categoria) {
@@ -40,7 +41,6 @@ class ProductoService {
       .then(async resultado => {
         const nuevo = resultado.rows[0];
 
-        // ✅ Registrar movimiento inicial en bitácora
         await pool.query(
           `INSERT INTO bitacora (codigo_producto, tipo_movimiento, cantidad, descripcion)
            VALUES ($1, 'registro_inicial', $2, 'Registro inicial del producto')`,
@@ -48,38 +48,29 @@ class ProductoService {
         );
 
         try {
-          // ✅ Recalcular stock automáticamente
           await InventarioReportService.recalculateStockByCodigo(nuevo.codigo);
         } catch (err) {
           console.error('Error al recalcular stock:', err);
         }
 
-        return nuevo;
-      })
-      .then(nuevo => new Producto(
-        nuevo.codigo,
-        nuevo.nombre,
-        nuevo.descripcion,
-        nuevo.cantidad,
-        nuevo.stock,
-        nuevo.precio,
-        nuevo.proveedor,
-        nuevo.id_categoria,
-        nuevo.imagen,
-        nuevo.fecha_ingreso
-      ));
+        // Formatear fecha
+        nuevo.fecha_ingreso = formatDate(nuevo.fecha_ingreso);
+
+        // Agregar alerta de bajo stock
+        const alertaBajoStock = nuevo.stock <= LOW_STOCK_THRESHOLD;
+
+        return { producto: nuevo, alertaBajoStock };
+      });
   }
 
-
-
-  // Listar todos los productos con su categoría
   static listar() {
     return pool.query(`
       SELECT p.*, c.nombre AS categoria_nombre
       FROM productos p
       LEFT JOIN categorias c ON p.id_categoria = c.id
       ORDER BY p.fecha_ingreso DESC
-    `).then(r => r.rows);
+    `)
+      .then(r => r.rows.map(p => ({ ...p, fecha_ingreso: formatDate(p.fecha_ingreso) })));
   }
 
   static listarPorCampo(campo, valor) {
@@ -95,7 +86,7 @@ class ProductoService {
       FROM productos p
       LEFT JOIN categorias c ON p.id_categoria = c.id
       ${query}`, [`%${valor}%`]
-    ).then(r => r.rows);
+    ).then(r => r.rows.map(p => ({ ...p, fecha_ingreso: formatDate(p.fecha_ingreso) })));
   }
 
   static actualizar(codigo, datos) {
@@ -107,7 +98,7 @@ class ProductoService {
           throw error;
         }
 
-        const productoAnterior = resultado.rows[0];
+        const productoAnterior = r.rows[0];
 
         return pool.query(
           `UPDATE productos SET
@@ -122,18 +113,21 @@ class ProductoService {
            WHERE codigo = $9
            RETURNING *`,
           [
-            nombre.trim(),
-            descripcion || null,
-            cantidad,
-            stock,
-            precio,
-            proveedor || null,
-            id_categoria || null,
-            imagen || null,
+            datos.nombre.trim(),
+            datos.descripcion || null,
+            datos.cantidad,
+            datos.stock,
+            datos.precio,
+            datos.proveedor || null,
+            datos.id_categoria || null,
+            datos.imagen || null,
             codigo
           ]
         ).then(resultadoActualizado => {
           const actualizado = resultadoActualizado.rows[0];
+
+          // Formatear fecha
+          actualizado.fecha_ingreso = formatDate(actualizado.fecha_ingreso);
 
           // Verificar diferencia en cantidad o stock
           const diferencia = actualizado.cantidad - productoAnterior.cantidad;
@@ -149,21 +143,12 @@ class ProductoService {
           return actualizado;
         });
       })
-      .then(actualizado => new Producto(
-        actualizado.codigo,
-        actualizado.nombre,
-        actualizado.descripcion,
-        actualizado.cantidad,
-        actualizado.stock,
-        actualizado.precio,
-        actualizado.proveedor,
-        actualizado.id_categoria,
-        actualizado.imagen,
-        actualizado.fecha_ingreso
-      ));
+      .then(actualizado => {
+        const alertaBajoStock = actualizado.stock <= LOW_STOCK_THRESHOLD;
+        return { producto: actualizado, alertaBajoStock };
+      });
   }
 
-  // Eliminar producto
   static eliminar(codigo) {
     return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])
       .then(r => {
@@ -173,19 +158,17 @@ class ProductoService {
           throw error;
         }
 
-        const producto = resultado.rows[0];
+        const producto = r.rows[0];
 
         return pool.query("DELETE FROM productos WHERE codigo = $1 RETURNING *", [codigo])
           .then(resultadoDelete => {
-            // Registrar salida en bitácora
             return pool.query(
               `INSERT INTO bitacora (codigo_producto, tipo_movimiento, cantidad, descripcion)
                VALUES ($1, 'salida', $2, 'Producto eliminado del inventario')`,
               [producto.codigo, producto.cantidad]
-            ).then(() => resultadoDelete);
+            ).then(() => resultadoDelete.rows[0]);
           });
-      })
-      .then(r => r.rows[0]);
+      });
   }
 }
 
