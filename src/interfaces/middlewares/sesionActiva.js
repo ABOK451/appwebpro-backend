@@ -113,12 +113,12 @@ const extenderSesion = async (req, res, next) => {
 
       const tiempoRestanteMin = Math.ceil((nuevaFin - ahora) / 60000);
 
-      return res.status(200).json({
-        mensaje: "Sesión extendida",
-        codigo: 0,
-        token: usuario.token,
-        tiempo_restante_min: tiempoRestanteMin
-      });
+      // Guardamos info en req para usarla en la siguiente ruta
+      req.tokenExtendido = usuario.token;
+      req.tiempoRestanteMin = tiempoRestanteMin;
+
+      // Llamamos a next para que la ruta se ejecute
+      next();
 
     } else {
       // Sesión expirada → cerrar
@@ -149,5 +149,6 @@ const extenderSesion = async (req, res, next) => {
     });
   }
 };
+
 
 module.exports = { verificarSesionActiva, extenderSesion };

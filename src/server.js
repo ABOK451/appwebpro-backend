@@ -13,6 +13,8 @@ const recuperarRoutes = require("./interfaces/routes/recuperarRoutes");
 const loginRoutes = require("./interfaces/routes/loginRoutes");
 const rolesRoutes = require("./interfaces/routes/rolesRoutes");
 const productosRoutes = require("./interfaces/routes/productoRoutes");
+const invetarioRoutes = require("./interfaces/routes/inventarioRoutes");
+const reporteRoutes = require("./interfaces/routes/reporteRoutes");
 const categoriaRoutes = require("./interfaces/routes/categoriaRoutes");
 const errorResponse = require('./helpers/errorResponse'); 
 require("dotenv").config();
@@ -66,28 +68,36 @@ app.use(cors({
 // Swagger
 const swaggerUsuarios = YAML.load("./src/config/OpenApi/swagger.yaml");
 const swaggerProductos = YAML.load("./src/config/OpenApi/swagger-productos.yaml");
+const swaggerBitacora = YAML.load("./src/config/OpenApi/swagger-bitacora.yaml");
+const swaggerReporte = YAML.load("./src/config/OpenApi/swagger-reporte.yaml");
 
 const swaggerDocument = {
-  openapi: "3.0.0",
-  info: {
-    title: "API Completa",
-    version: "1.0.0"
-  },
-  servers: swaggerUsuarios.servers || [],
-  paths: { 
-    ...swaggerUsuarios.paths, 
-    ...swaggerProductos.paths 
-  },
-  components: {
-    securitySchemes: {
-      ...(swaggerUsuarios.components?.securitySchemes || {}),
-      ...(swaggerProductos.components?.securitySchemes || {}),
+    openapi: "3.0.0",
+    info: {
+        title: "API Completa",
+        version: "1.0.0"
     },
-    schemas: {
-      ...(swaggerUsuarios.components?.schemas || {}),
-      ...(swaggerProductos.components?.schemas || {}),
+    servers: swaggerUsuarios.servers || [],
+    paths: {
+        ...swaggerUsuarios.paths,
+        ...swaggerProductos.paths,
+        ...swaggerBitacora.paths,
+        ...swaggerReporte.paths
+    },
+    components: {
+        securitySchemes: {
+            ...(swaggerUsuarios.components.securitySchemes || {}),
+            ...(swaggerProductos.components.securitySchemes || {}),
+            ...(swaggerBitacora.components.securitySchemes || {}),
+            ...(swaggerReporte.components.securitySchemes || {}),
+        },
+        schemas: {
+            ...(swaggerUsuarios.components.schemas || {}),
+            ...(swaggerProductos.components.schemas || {}),
+            ...(swaggerBitacora.components.schemas || {}),
+            ...(swaggerReporte.components.schemas || {}),
+        }
     }
-  }
 };
 
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
@@ -99,8 +109,9 @@ app.use("/", recuperarRoutes);
 app.use("/", loginRoutes);
 app.use("/", rolesRoutes);
 app.use("/", productosRoutes);
+app.use("/", invetarioRoutes);
+app.use("/", reporteRoutes);
 app.use("/", categoriaRoutes);
-
 
 // Certificados
 const certDir = "src/certs";
