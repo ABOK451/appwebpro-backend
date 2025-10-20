@@ -1,7 +1,10 @@
-function errorResponse(codigo, mensaje, detalle = null, codigoEstado = 1) {
+function errorResponse(mensaje, detalle = null, codigo = 1) {
   return {
-    codigo: codigoEstado,       
-    error: { codigo, mensaje, detalle }
+    codigo,        // código general de la respuesta
+    error: {
+      mensaje,
+      detalle       // puede ser string, objeto o arreglo de errores
+    }
   };
 }
 

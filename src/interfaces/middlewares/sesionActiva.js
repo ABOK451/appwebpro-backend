@@ -9,7 +9,7 @@ const verificarSesionActiva = async (req, res, next) => {
   if (!correo) {
     console.log("[verificarSesionActiva] FALTA_CORREO");
     return res.status(200).json(
-      errorResponse("FALTA_CORREO", "Correo es requerido", null, 2)
+      errorResponse("Correo es requerido", null, 2) // 2 = validación
     );
   }
 
@@ -28,7 +28,7 @@ const verificarSesionActiva = async (req, res, next) => {
       await client.query('ROLLBACK');
       console.log("[verificarSesionActiva] Usuario no encontrado:", correo);
       return res.status(200).json(
-        errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3)
+        errorResponse("Usuario no encontrado", null, 3) // 3 = no encontrado
       );
     }
 
@@ -43,7 +43,7 @@ const verificarSesionActiva = async (req, res, next) => {
       await client.query('COMMIT');
       console.log("[verificarSesionActiva] Sesión sigue activa");
 
-      const tiempoRestanteMin = Math.ceil((new Date(login.fin_sesion) - ahora) / 60000); // minutos
+      const tiempoRestanteMin = Math.ceil((new Date(login.fin_sesion) - ahora) / 60000);
 
       return res.status(200).json({
         mensaje: "Ya existe una sesión activa",
@@ -61,13 +61,12 @@ const verificarSesionActiva = async (req, res, next) => {
     await client.query('ROLLBACK');
     console.error("[verificarSesionActiva] ERROR:", error);
     return res.status(200).json(
-      errorResponse("ERROR_SERVIDOR", "Error al verificar sesión activa", error.message, 3)
+      errorResponse("Error al verificar sesión activa", error.message, 5) // 5 = error servidor
     );
   } finally {
     client.release();
   }
 };
-
 
 const extenderSesion = async (req, res, next) => {
   try {
@@ -76,79 +75,51 @@ const extenderSesion = async (req, res, next) => {
 
     if (!token) {
       console.log("[extenderSesion] No se proporcionó token");
-      return res.status(200).json({ 
-        codigo: 3, 
-        error: { 
-          codigo: "SESION_NO_INICIADA", 
-          mensaje: "No se pudo obtener la sesión. Necesitas iniciar sesión.", 
-          detalle: null 
-        } 
-      });
+      return res.status(200).json(
+        errorResponse("No se pudo obtener la sesión. Necesitas iniciar sesión.", null, 1) // 1 = sesión no iniciada
+      );
     }
-
-    console.log("[extenderSesion] Token encontrado:", token);
 
     const usuario = await UsuarioService.buscarPorToken(token);
     console.log("[extenderSesion] Usuario obtenido por token:", usuario);
 
     if (!usuario || !usuario.sesion_activa) {
       console.log("[extenderSesion] Usuario no encontrado o sesión inactiva");
-      return res.status(200).json({ 
-        codigo: 3, 
-        error: { 
-          codigo: "SESION_INACTIVA", 
-          mensaje: "La sesión no está activa. Necesitas iniciar sesión nuevamente.", 
-          detalle: null 
-        } 
-      });
+      return res.status(200).json(
+        errorResponse("La sesión no está activa. Necesitas iniciar sesión nuevamente.", null, 2)
+      );
     }
 
     const ahora = new Date();
 
     if (usuario.fin_sesion && usuario.fin_sesion > ahora) {
-      // Sesión activa → extender
       const nuevaFin = new Date(ahora.getTime() + 3 * 60000); // +3 min
       await UsuarioService.actualizarLogin(usuario.id, { fin_sesion: nuevaFin });
       console.log(`[extenderSesion] Sesión extendida hasta ${nuevaFin}`);
 
       const tiempoRestanteMin = Math.ceil((nuevaFin - ahora) / 60000);
-
-      // Guardamos info en req para usarla en la siguiente ruta
       req.tokenExtendido = usuario.token;
       req.tiempoRestanteMin = tiempoRestanteMin;
 
-      // Llamamos a next para que la ruta se ejecute
       next();
 
     } else {
-      // Sesión expirada → cerrar
       await UsuarioService.actualizarLogin(usuario.id, { 
         sesion_activa: false, 
         fin_sesion: null 
       });
       console.log("[extenderSesion] Sesión expiró, se cerró correctamente");
-      return res.status(401).json({ 
-        codigo: 3, 
-        error: { 
-          codigo: "SESION_EXPIRADA", 
-          mensaje: "La sesión expiró. Necesitas iniciar sesión nuevamente.", 
-          detalle: null 
-        } 
-      });
+      return res.status(200).json(
+        errorResponse("La sesión expiró. Necesitas iniciar sesión nuevamente.", null, 3)
+      );
     }
 
   } catch (err) {
     console.error("[extenderSesion] Error:", err);
-    return res.status(200).json({ 
-      codigo: 3, 
-      error: { 
-        codigo: "ERROR_SERVIDOR", 
-        mensaje: "Error al validar la sesión", 
-        detalle: err.message 
-      } 
-    });
+    return res.status(200).json(
+      errorResponse("Error al validar la sesión", err.message, 5)
+    );
   }
 };
-
 
 module.exports = { verificarSesionActiva, extenderSesion };

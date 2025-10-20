@@ -3,113 +3,130 @@ const errorResponse = require('../../helpers/errorResponse');
 
 const BitacoraController = {
 
-  // Crear registro
-crear(req, res) {
+  crear(req, res) {
   const { id_producto, tipo_movimiento, cantidad, descripcion } = req.body;
   const errores = [];
 
-  if (!id_producto) {
-    errores.push({ campo: "id_producto", mensaje: "El campo id_producto es obligatorio" });
-  } else if (typeof id_producto !== 'string') {
+  if (!id_producto) errores.push({ campo: "id_producto", mensaje: "El campo id_producto es obligatorio" });
+  if (id_producto && typeof id_producto !== 'string')
     errores.push({ campo: "id_producto", mensaje: "id_producto debe ser un texto válido (código de producto)" });
-  }
 
-  // Validación tipo_movimiento
-  if (!tipo_movimiento) {
-    errores.push({ campo: "tipo_movimiento", mensaje: "El campo tipo_movimiento es obligatorio" });
-  } else if (!['entrada', 'salida'].includes(tipo_movimiento)) {
+  if (!tipo_movimiento) errores.push({ campo: "tipo_movimiento", mensaje: "El campo tipo_movimiento es obligatorio" });
+  if (tipo_movimiento && !['entrada', 'salida'].includes(tipo_movimiento))
     errores.push({ campo: "tipo_movimiento", mensaje: "tipo_movimiento debe ser 'entrada' o 'salida'" });
-  }
 
-  // Validación cantidad
-  if (cantidad === undefined || cantidad === null) {
+  if (cantidad === undefined || cantidad === null)
     errores.push({ campo: "cantidad", mensaje: "El campo cantidad es obligatorio" });
-  } else if (isNaN(cantidad) || Number(cantidad) <= 0) {
-    errores.push({ campo: "cantidad", mensaje: "cantidad debe ser un número entero positivo" });
-  }
 
-  // Validación descripcion
+  if (cantidad !== undefined && (isNaN(cantidad) || Number(cantidad) <= 0))
+    errores.push({ campo: "cantidad", mensaje: "cantidad debe ser un número entero positivo" });
+
   if (descripcion) {
-    if (typeof descripcion !== 'string') {
+    if (typeof descripcion !== 'string')
       errores.push({ campo: "descripcion", mensaje: "descripcion debe ser un texto" });
-    } else {
+    else {
       const regexDescripcion = /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ.,;:()¿?!¡\s-]+$/;
-      if (!regexDescripcion.test(descripcion)) {
-        errores.push({
-          campo: "descripcion",
-          mensaje: "descripcion contiene caracteres no permitidos"
-        });
-      }
+      if (!regexDescripcion.test(descripcion))
+        errores.push({ campo: "descripcion", mensaje: "descripcion contiene caracteres no permitidos" });
     }
   }
 
-  if (errores.length > 0) {
-    return res.status(200).json(
-      errorResponse("VALIDACION_DATOS", "Errores en los campos enviados", errores)
-    );
-  }
+  if (errores.length > 0) 
+    return res.status(200).json(errorResponse("Errores de validación", errores, 2));
 
-  BitacoraService.registrar({ 
-    id_producto, 
-    tipo_movimiento, 
-    cantidad: Number(cantidad), 
-    descripcion 
-  })
-  .then(data => res.status(200).json({ mensaje: "Registro agregado a bitácora", data }))
-  .catch(err => res.status(200).json(
-    errorResponse("ERROR_INTERNO", "Error al registrar en bitácora", err.message)
-  ));
+  ProductoService.obtenerPorId(id_producto)
+    .then(producto => {
+      if (!producto) {
+        throw { msg: "Producto no encontrado", code: 3 };
+      }
+
+      const stockTotal = producto.stock;
+      let stockActual = producto.cantidad;
+
+      if (tipo_movimiento === 'salida') {
+        if (cantidad > stockActual) {
+          throw { msg: "No hay suficiente stock para esta salida", code: 2 };
+        }
+
+        stockActual -= Number(cantidad);
+
+        return ProductoService.actualizarCantidad(id_producto, stockActual)
+          .then(() => ({ producto, stockActual, stockTotal }));
+      }
+
+      return { producto, stockActual, stockTotal };
+    })
+    .then(({ producto, stockActual, stockTotal }) => {
+
+      const limiteBajo = Math.ceil(stockTotal * 0.1);
+      if (stockActual <= limiteBajo) {
+        console.log(`⚠️ Alerta: Stock bajo para ${producto.nombre} (${stockActual}/${stockTotal})`);
+
+        const transporter = require('../../config/email');
+        const mailOptions = {
+          from: 'tu_correo@gmail.com',
+          to: 'destinatario@correo.com',
+          subject: `⚠ Stock bajo: ${producto.nombre}`,
+          text: `El producto ${producto.nombre} tiene solo ${stockActual} unidades disponibles (stock máximo ${stockTotal}).`
+        };
+
+        transporter.sendMail(mailOptions, (error, info) => {
+          if (error) {
+            console.error("❌ Error enviando correo:", error);
+          } else {
+            console.log("✅ Correo enviado:", info.response);
+          }
+        });
+
+      }
+
+      return BitacoraService.registrar({
+        id_producto,
+        tipo_movimiento,
+        cantidad: Number(cantidad),
+        descripcion
+      });
+    })
+    .then(data => {
+      res.json({ codigo: 0, mensaje: "Registro agregado a bitácora", data });
+    })
+    .catch(err => {
+      console.error(err);
+      const codigo = err.code || 3;
+      res.status(200).json(errorResponse(err.msg || "Error al registrar en bitácora", err.message || null, codigo));
+    });
 },
 
 
-  // Listar todos
   listar(req, res) {
     BitacoraService.listar()
-      .then(data => res.status(200).json(data))
-      .catch(err => res.status(200).json(
-        errorResponse("ERROR_INTERNO", "Error al listar bitácora", err.message)
-      ));
+      .then(data => res.json({ codigo: 0, mensaje: "Listado de bitácora", data }))
+      .catch(err => res.status(200).json(errorResponse("Error al listar bitácora", err.message, 3)));
   },
 
-  // Actualizar
   actualizar(req, res) {
     const { id, tipo_movimiento, cantidad, descripcion } = req.body;
     const errores = [];
 
-    if (!id) {
-      errores.push({ campo: "id", mensaje: "El campo id es obligatorio" });
-    } else if (isNaN(id) || Number(id) <= 0) {
-      errores.push({ campo: "id", mensaje: "id debe ser un número entero positivo" });
-    }
+    if (!id) errores.push({ campo: "id", mensaje: "El campo id es obligatorio" });
+    if (id !== undefined && (isNaN(id) || Number(id) <= 0)) errores.push({ campo: "id", mensaje: "id debe ser un número entero positivo" });
 
-    if (tipo_movimiento && !['entrada', 'salida'].includes(tipo_movimiento)) {
+    if (tipo_movimiento && !['entrada', 'salida'].includes(tipo_movimiento))
       errores.push({ campo: "tipo_movimiento", mensaje: "tipo_movimiento debe ser 'entrada' o 'salida'" });
-    }
 
-    if (cantidad !== undefined && (isNaN(cantidad) || Number(cantidad) <= 0)) {
+    if (cantidad !== undefined && (isNaN(cantidad) || Number(cantidad) <= 0))
       errores.push({ campo: "cantidad", mensaje: "cantidad debe ser un número entero positivo" });
-    }
 
     if (descripcion !== undefined) {
-      if (typeof descripcion !== 'string') {
-        errores.push({ campo: "descripcion", mensaje: "descripcion debe ser un texto" });
-      } else {
+      if (typeof descripcion !== 'string') errores.push({ campo: "descripcion", mensaje: "descripcion debe ser un texto" });
+      else {
         const regexDescripcion = /^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ.,;:()¿?!¡\s-]+$/;
-        if (!regexDescripcion.test(descripcion)) {
-          errores.push({
-            campo: "descripcion",
-            mensaje: "descripcion contiene caracteres no permitidos"
-          });
-        }
+        if (!regexDescripcion.test(descripcion))
+          errores.push({ campo: "descripcion", mensaje: "descripcion contiene caracteres no permitidos" });
       }
     }
 
-
-    if (errores.length > 0) {
-      return res.status(200).json(
-        errorResponse("VALIDACION_DATOS", "Errores en los campos enviados", errores)
-      );
-    }
+    if (errores.length > 0) return res.status(200).json(errorResponse("Errores de validación", errores, 2));
 
     BitacoraService.actualizar({ 
       id: Number(id), 
@@ -118,45 +135,27 @@ crear(req, res) {
       descripcion 
     })
       .then(data => {
-        if (!data) {
-          return res.status(200).json(
-            errorResponse("NO_ENCONTRADO", "Registro no encontrado")
-          );
-        }
-        res.status(200).json({ mensaje: "Registro actualizado", data });
+        if (!data) return res.status(200).json(errorResponse("Registro no encontrado", null, 2));
+        res.json({ codigo: 0, mensaje: "Registro actualizado", data });
       })
-      .catch(err => res.status(200).json(
-        errorResponse("ERROR_INTERNO", "Error al actualizar bitácora", err.message)
-      ));
+      .catch(err => res.status(200).json(errorResponse("Error al actualizar bitácora", err.message, 3)));
   },
 
-  // Eliminar
   eliminar(req, res) {
     const { id } = req.body;
     const errores = [];
 
-    if (!id) {
-      errores.push({ campo: "id", mensaje: "El campo id es obligatorio" });
-    } else if (isNaN(id) || Number(id) <= 0) {
-      errores.push({ campo: "id", mensaje: "id debe ser un número entero positivo" });
-    }
+    if (!id) errores.push({ campo: "id", mensaje: "El campo id es obligatorio" });
+    if (id !== undefined && (isNaN(id) || Number(id) <= 0)) errores.push({ campo: "id", mensaje: "id debe ser un número entero positivo" });
 
-    if (errores.length > 0) {
-      return res.status(200).json(
-        errorResponse("VALIDACION_DATOS", "Errores en los campos enviados", errores)
-      );
-    }
+    if (errores.length > 0) return res.status(200).json(errorResponse("Errores de validación", errores, 2));
 
     BitacoraService.eliminar({ id: Number(id) })
       .then(data => {
-        if (!data) {
-          return res.status(200).json(
-            errorResponse("NO_ENCONTRADO", "Registro no encontrado")
-          );
-        }
-        // ejemplo de data devuelta
-        res.status(200).json({
-          mensaje: "Registro eliminado",
+        if (!data) return res.status(200).json(errorResponse("Registro no encontrado", null, 2));
+        res.json({ 
+          codigo: 0, 
+          mensaje: "Registro eliminado", 
           data: {
             id: data.id,
             codigo_producto: data.codigo_producto,
@@ -167,11 +166,8 @@ crear(req, res) {
             fecha: data.fecha
           }
         });
-
       })
-      .catch(err => res.status(200).json(
-        errorResponse("ERROR_INTERNO", "Error al eliminar registro", err.message)
-      ));
+      .catch(err => res.status(200).json(errorResponse("Error al eliminar registro", err.message, 3)));
   }
 
 };

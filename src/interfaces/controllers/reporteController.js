@@ -2,7 +2,6 @@ const InventarioReportService = require('../../application/inventarioReporteServ
 const errorResponse = require('../../helpers/errorResponse');
 const PDFDocument = require('pdfkit');
 const ExcelJS = require('exceljs');
-const stream = require('stream');
 const moment = require('moment');
 
 function sendPdfBuffer(res, buffer, filename = 'reporte.pdf') {
@@ -19,46 +18,40 @@ function sendExcelBuffer(res, buffer, filename = 'reporte.xlsx') {
 
 const ReportController = {
 
-  // RF2.1 - inventario actual
   inventarioActual(req, res) {
     InventarioReportService.reporteInventarioActual()
       .then(data => res.json({ codigo: 0, mensaje: 'Inventario actual', data }))
-      .catch(err => res.status(200).json(errorResponse('ERROR_REPORTE', 'Error al generar inventario actual', err.message)));
+      .catch(err => res.status(200).json(errorResponse('Error al generar inventario actual', err.message, 5)));
   },
 
-  // RF2.1 - mas vendidos
   masVendidos(req, res) {
     const { fecha_inicio, fecha_fin, limit } = req.body || {};
     InventarioReportService.reporteMasVendidos({ fecha_inicio, fecha_fin, limit })
       .then(data => res.json({ codigo: 0, mensaje: 'Productos más vendidos', data }))
-      .catch(err => res.status(200).json(errorResponse('ERROR_REPORTE', 'Error al generar reporte de más vendidos', err.message)));
+      .catch(err => res.status(200).json(errorResponse('Error al generar reporte de más vendidos', err.message, 5)));
   },
 
-  // RF2.1 - bajo stock
   bajoStock(req, res) {
     const { threshold } = req.body || {};
     InventarioReportService.reporteBajoStock({ threshold })
       .then(data => res.json({ codigo: 0, mensaje: 'Productos con bajo stock', data }))
-      .catch(err => res.status(200).json(errorResponse('ERROR_REPORTE', 'Error al generar reporte bajo stock', err.message)));
+      .catch(err => res.status(200).json(errorResponse('Error al generar reporte bajo stock', err.message, 5)));
   },
 
-  // RF2.1 - movimientos por periodo (body: fecha_inicio, fecha_fin, codigo_producto optional)
   movimientosPeriodo(req, res) {
     const { fecha_inicio, fecha_fin, codigo_producto } = req.body || {};
     InventarioReportService.reporteMovimientosPeriodo({ fecha_inicio, fecha_fin, codigo_producto })
       .then(data => res.json({ codigo: 0, mensaje: 'Movimientos por periodo', data }))
-      .catch(err => res.status(200).json(errorResponse('ERROR_REPORTE', 'Error al generar movimientos por periodo', err.message)));
+      .catch(err => res.status(200).json(errorResponse('Error al generar movimientos por periodo', err.message, 5)));
   },
 
-  // RF2.2 - exportar reporte a PDF o Excel
   exportReport(req, res) {
-    // body: { reportType: 'inventario'|'mas_vendidos'|'bajo_stock'|'movimientos_periodo', params: {...}, format: 'pdf'|'excel' }
     const { reportType, params = {}, format = 'pdf' } = req.body || {};
     InventarioReportService.fetchReportData(reportType, params)
       .then(rows => {
         const now = moment().format('YYYYMMDD_HHmm');
+
         if (format === 'pdf') {
-          // genera PDF simple con PDFKit
           const doc = new PDFDocument({ margin: 30 });
           const buffers = [];
           doc.on('data', buffers.push.bind(buffers));
@@ -69,15 +62,14 @@ const ReportController = {
 
           doc.fontSize(18).text(`Reporte: ${reportType}`, { align: 'center' });
           doc.moveDown();
-          // tabla simple
           doc.fontSize(10);
+
           if (!rows || rows.length === 0) {
             doc.text('No hay datos para este reporte');
             doc.end();
             return;
           }
 
-          // Encabezados dependiendo del reportType
           const keys = Object.keys(rows[0]);
           doc.text(keys.join(' | '));
           doc.moveDown(0.2);
@@ -91,6 +83,7 @@ const ReportController = {
         } else if (format === 'excel') {
           const workbook = new ExcelJS.Workbook();
           const sheet = workbook.addWorksheet('Reporte');
+
           if (!rows || rows.length === 0) {
             sheet.addRow(['No hay datos']);
           } else {
@@ -101,42 +94,40 @@ const ReportController = {
 
           workbook.xlsx.writeBuffer()
             .then(buffer => sendExcelBuffer(res, buffer, `${reportType}_${now}.xlsx`))
-            .catch(err => res.status(200).json(errorResponse('ERROR_EXPORT', 'Error al generar Excel', err.message)));
+            .catch(err => res.status(200).json(errorResponse('Error al generar Excel', err.message, 5)));
 
         } else {
-          return res.status(200).json(errorResponse('FORMAT_INVALID', 'Formato de exportación inválido', `format=${format}`));
+          return res.status(200).json(errorResponse('Formato de exportación inválido', `format=${format}`, 2));
         }
       })
-      .catch(err => res.status(200).json(errorResponse('ERROR_REPORTE', 'Error al obtener datos para exportar', err.message)));
+      .catch(err => res.status(200).json(errorResponse('Error al obtener datos para exportar', err.message, 5)));
   },
 
-  // RF2.3 - endpoints para dashboards
   dashboardMasVendidos(req, res) {
     const { fecha_inicio, fecha_fin, limit } = req.body || {};
     InventarioReportService.dashboardMasVendidos({ periodo: { fecha_inicio, fecha_fin }, limit })
       .then(data => res.json({ codigo: 0, data }))
-      .catch(err => res.status(200).json(errorResponse('ERROR_DASHBOARD', 'Error al obtener datos dashboard', err.message)));
+      .catch(err => res.status(200).json(errorResponse('Error al obtener datos dashboard', err.message, 5)));
   },
 
   dashboardValorInventario(req, res) {
     InventarioReportService.dashboardValorInventario()
       .then(data => res.json({ codigo: 0, data }))
-      .catch(err => res.status(200).json(errorResponse('ERROR_DASHBOARD', 'Error al obtener valor del inventario', err.message)));
+      .catch(err => res.status(200).json(errorResponse('Error al obtener valor del inventario', err.message, 5)));
   },
 
-  // RF2.4 - endpoint para forzar recálculo (puedes llamar esto desde hooks cuando se crea/actualiza movimientos)
   recalculateAll(req, res) {
     InventarioReportService.recalculateAllStocks()
       .then(updated => res.json({ codigo: 0, mensaje: 'Stocks recalculados', updated }))
-      .catch(err => res.status(200).json(errorResponse('ERROR_RECALC', 'Error al recalcular stocks', err.message)));
+      .catch(err => res.status(200).json(errorResponse('Error al recalcular stocks', err.message, 5)));
   },
 
   recalculateByCodigo(req, res) {
     const { codigo } = req.body || {};
-    if (!codigo) return res.status(200).json(errorResponse('VALIDACION_DATOS', 'Falta el campo codigo'));
+    if (!codigo) return res.status(200).json(errorResponse('Falta el campo codigo', null, 2));
     InventarioReportService.recalculateStockByCodigo(codigo)
       .then(p => res.json({ codigo: 0, mensaje: 'Stock recalculado', producto: p }))
-      .catch(err => res.status(200).json(errorResponse('ERROR_RECALC', 'Error al recalcular stock', err.message)));
+      .catch(err => res.status(200).json(errorResponse('Error al recalcular stock', err.message, 5)));
   }
 
 };

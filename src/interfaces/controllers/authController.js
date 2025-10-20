@@ -14,44 +14,40 @@ const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
 const codigoRegex = /^\d+$/;
 
-const hayInternet = () => {
-  return new Promise((resolve) => {
-    dns.lookup('google.com', (err) => resolve(!err));
-  });
-};
+const hayInternet = () => new Promise(resolve => dns.lookup('google.com', err => resolve(!err)));
 
 const loginUsuario = (req, res) => {
   const { correo, password } = req.body;
   const errores = [];
 
-  if (!correo) errores.push({ codigo: "FALTA_CORREO", mensaje: "Correo es requerido" });
-  if (!password) errores.push({ codigo: "FALTA_PASSWORD", mensaje: "Contraseña es requerida" });
+  if (!correo) errores.push({ campo: "correo", mensaje: "Correo es requerido" });
+  if (!password) errores.push({ campo: "password", mensaje: "Contraseña es requerida" });
 
-  if (correo && typeof correo !== 'string') errores.push({ codigo: "TIPO_INVALIDO_CORREO", mensaje: "Correo debe ser texto" });
-  if (password && typeof password !== 'string') errores.push({ codigo: "TIPO_INVALIDO_PASSWORD", mensaje: "Contraseña debe ser texto" });
+  if (correo && typeof correo !== 'string') errores.push({ campo: "correo", mensaje: "Correo debe ser texto" });
+  if (password && typeof password !== 'string') errores.push({ campo: "password", mensaje: "Contraseña debe ser texto" });
 
-  if (correo && correo.trim() === "") errores.push({ codigo: "VACIO_CORREO", mensaje: "Correo no puede estar vacío" });
-  if (password && password.trim() === "") errores.push({ codigo: "VACIO_PASSWORD", mensaje: "Contraseña no puede estar vacía" });
+  if (correo && correo.trim() === "") errores.push({ campo: "correo", mensaje: "Correo no puede estar vacío" });
+  if (password && password.trim() === "") errores.push({ campo: "password", mensaje: "Contraseña no puede estar vacía" });
 
-  if (correo && !correoRegex.test(correo)) errores.push({ codigo: "CORREO_INVALIDO", mensaje: "El correo debe tener un formato válido, ejemplo: usuario@dominio.com" });
-  if (password && !passwordRegex.test(password)) errores.push({ codigo: "PASSWORD_INVALIDA", mensaje: "La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" });
+  if (correo && !correoRegex.test(correo)) errores.push({ campo: "correo", mensaje: "El correo debe tener un formato válido" });
+  if (password && !passwordRegex.test(password)) errores.push({ campo: "password", mensaje: "Contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" });
 
-  if (errores.length > 0) return res.status(200).json(errorResponse("ERRORES_VALIDACION", "Errores de validación", errores, 2));
+  if (errores.length > 0) return res.status(200).json(errorResponse("Errores de validación", errores, 2));
 
   UsuarioService.buscarPorCorreo(correo)
     .then(usuario => {
-      if (!usuario) return res.status(200).json(errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3));
+      if (!usuario) return res.status(200).json(errorResponse("Usuario no encontrado", null, 3));
 
       return isBlocked(usuario.id)
         .then(bloqueado => {
-          if (bloqueado) return res.status(200).json(errorResponse("CUENTA_BLOQUEADA", `Cuenta bloqueada hasta ${usuario.blocked_until}`, null, 3));
+          if (bloqueado) return res.status(200).json(errorResponse(`Cuenta bloqueada hasta ${usuario.blocked_until}`, null, 3));
 
           return bcrypt.compare(password, usuario.password)
             .then(passwordCorrecto => {
               if (!passwordCorrecto) {
-                return loginAttempt(usuario).then(() => {
-                  return res.status(200).json(errorResponse("CONTRASENA_INCORRECTA", "Contraseña incorrecta", null, 2));
-                });
+                return loginAttempt(usuario).then(() =>
+                  res.status(200).json(errorResponse("Contraseña incorrecta", null, 2))
+                );
               }
 
               return UsuarioService.actualizarLogin(usuario.id, { failed_attempts: 0, blocked_until: null })
@@ -59,11 +55,8 @@ const loginUsuario = (req, res) => {
                   const ipParaPrueba = req.ip === "::1" ? "8.8.8.8" : req.ip;
                   return obtenerUbicacionIP(ipParaPrueba)
                     .then(ubicacion => {
-                      if (ubicacion && ubicacion.lat && ubicacion.lng) {
+                      if (ubicacion?.lat && ubicacion?.lng) {
                         return AuthService.guardarUbicacion(usuario.id, ubicacion.lat, ubicacion.lng);
-                      } else {
-                        console.warn("No se pudo obtener ubicación para el usuario:", usuario.correo);
-                        return Promise.resolve();
                       }
                     })
                     .then(() => {
@@ -92,40 +85,39 @@ const loginUsuario = (req, res) => {
         });
     })
     .catch(error => {
-      console.error(error);
-      return res.status(200).json(errorResponse("ERROR_SERVIDOR", "Error al iniciar sesión", error.message, 3));
+      console.error("Error loginUsuario:", error);
+      return res.status(200).json(errorResponse("Error al iniciar sesión", error.message, 3));
     });
 };
+
 const verificarCodigo = (req, res) => {
   const { correo, codigo } = req.body;
   const errores = [];
 
-  if (!correo) errores.push(errorResponse("FALTA_CORREO", "El correo es requerido", null, 2).error);
+  if (!correo) errores.push({ campo: "correo", mensaje: "El correo es requerido" });
   else if (!correoRegex.test((correo || "").trim().toLowerCase()))
-    errores.push(errorResponse("CORREO_INVALIDO", "El correo no tiene un formato válido", null, 2).error);
+    errores.push({ campo: "correo", mensaje: "El correo no tiene un formato válido" });
 
-  if (!codigo) errores.push(errorResponse("FALTA_CODIGO", "El código es requerido", null, 2).error);
-  else if (!codigoRegex.test(codigo))
-    errores.push(errorResponse("CODIGO_INVALIDO", "El código debe ser numérico", null, 2).error);
+  if (!codigo) errores.push({ campo: "codigo", mensaje: "El código es requerido" });
+  else if (!codigoRegex.test(codigo)) errores.push({ campo: "codigo", mensaje: "El código debe ser numérico" });
 
-  if (errores.length > 0) return res.status(200).json({ codigo: 2, errores });
+  if (errores.length > 0) return res.status(200).json(errorResponse("Errores de validación", errores, 2));
 
   const correoSanitizado = correo.trim().toLowerCase();
 
   UsuarioService.buscarPorCorreo(correoSanitizado)
     .then(usuario => {
-      if (!usuario) return res.status(200).json(errorResponse("NO_ENCONTRADO", "Usuario no encontrado", null, 3));
+      if (!usuario) return res.status(200).json(errorResponse("Usuario no encontrado", null, 3));
 
       return RecuperarService.validarCodigoReset(usuario.id, codigo)
         .then(valido => {
-          if (!valido) return res.status(200).json(errorResponse("CODIGO_INVALIDO", "Código inválido o expirado", null, 2));
+          if (!valido) return res.status(200).json(errorResponse("Código inválido o expirado", null, 2));
 
           return RecuperarService.limpiarCodigoReset(usuario.id)
             .then(() => pool.connect())
             .then(async client => {
               try {
                 await client.query('BEGIN');
-
                 const resLogin = await client.query(`SELECT * FROM usuario_login WHERE usuario_id = $1 FOR UPDATE`, [usuario.id]);
                 const ahora = new Date();
                 let token, tiempo_restante_min;
@@ -166,10 +158,9 @@ const verificarCodigo = (req, res) => {
     })
     .catch(error => {
       console.error("Error verificarCodigo:", error);
-      return res.status(200).json(errorResponse("ERROR_SERVIDOR", `Error al verificar código: ${error.message}`, null, 3));
+      return res.status(200).json(errorResponse("Error al verificar código", error.message, 3));
     });
 };
-
 
 module.exports = {
   loginUsuario,
