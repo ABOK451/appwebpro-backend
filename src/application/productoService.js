@@ -1,8 +1,9 @@
 const pool = require('../infrastructure/db');
 const Producto = require('../domain/producto');
 const InventarioReportService = require('../application/inventarioReporteService');
-const { formatDate } = require('../utils/dateUtils'); // ✅ utils de fecha
-const { LOW_STOCK_THRESHOLD } = require('../config/constants'); // ✅ constante de bajo stock
+const { formatDate } = require('../infrastructure/utils/dateUtils');
+const { LOW_STOCK_THRESHOLD } = require('../config/constants');
+
 
 class ProductoService {
   static validarCategoria(id_categoria) {

@@ -1,6 +1,5 @@
 const UsuarioService = require('../../application/usuarioService');
 const bcrypt = require('bcrypt');
-const errorResponse = require('../../helpers/errorResponse');
 
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
 const nombreRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ]+(?:\s[A-Za-zÁÉÍÓÚáéíóúÑñ]+)*$/;
@@ -12,10 +11,11 @@ const validarTelefono = (telefono) => {
   return /^\+52\d{10}$/.test(telefono);
 };
 
+// ---------------- LISTAR USUARIOS ----------------
 const listarUsuarios = (req, res) => {
   UsuarioService.listar()
     .then(usuarios => {
-      res.json({
+      res.status(200).json({
         mensaje: "Usuarios listados con éxito",
         codigo: 0,
         token: req.tokenExtendido || null,
@@ -23,11 +23,14 @@ const listarUsuarios = (req, res) => {
         usuarios
       });
     })
-    .catch(error => res.status(200).json(
-      errorResponse("Error al listar usuarios", error.message, 5) // 5 = error servidor
-    ));
+    .catch(error => res.status(200).json({
+      codigo: 5,
+      mensaje: "Error al listar usuarios",
+      detalle: error.message
+    }));
 };
 
+// ---------------- CREAR USUARIO ----------------
 const crearUsuario = (req, res) => {
   let { correo, password, rol, estado, nombre, app, apm, telefono } = req.body;
 
@@ -57,7 +60,7 @@ const crearUsuario = (req, res) => {
   if (estado && typeof estado !== 'string') errores.push("El estado solo puede contener texto");
 
   if (errores.length > 0) {
-    return res.status(200).json(errorResponse("Errores de validación", errores, 2)); // 2 = validación
+    return res.status(200).json({ codigo: 2, mensaje: "Errores de validación", errores });
   }
 
   bcrypt.hash(password, 10)
@@ -65,12 +68,13 @@ const crearUsuario = (req, res) => {
     .then(nuevoUsuario => res.status(200).json({ mensaje: "Usuario creado con éxito", usuario: nuevoUsuario, codigo: 0 }))
     .catch(error => {
       if (error.code === '23505' && error.detail?.includes('correo')) {
-        return res.status(200).json(errorResponse("El correo ya existe, no se puede repetir", null, 2));
+        return res.status(200).json({ codigo: 2, mensaje: "El correo ya existe, no se puede repetir" });
       }
-      res.status(200).json(errorResponse("Error al crear usuario", error.message, 5));
+      res.status(200).json({ codigo: 5, mensaje: "Error al crear usuario", detalle: error.message });
     });
 };
 
+// ---------------- ELIMINAR USUARIO ----------------
 const eliminarUsuario = (req, res) => {
   const { correo } = req.body;
   const errores = [];
@@ -78,16 +82,17 @@ const eliminarUsuario = (req, res) => {
   if (!correo) errores.push("El correo es requerido para eliminar un usuario");
   else if (!correoRegex.test(correo)) errores.push("El correo no tiene un formato válido");
 
-  if (errores.length > 0) return res.status(200).json(errorResponse("Errores de validación", errores, 2));
+  if (errores.length > 0) return res.status(200).json({ codigo: 2, mensaje: "Errores de validación", errores });
 
   UsuarioService.eliminar({ correo })
     .then(usuarioEliminado => {
-      if (!usuarioEliminado) return res.status(200).json(errorResponse(`Usuario con correo ${correo} no encontrado`, null, 3));
-      res.json({ mensaje: `Usuario ${usuarioEliminado.nombre} eliminado con éxito`, codigo: 0 });
+      if (!usuarioEliminado) return res.status(200).json({ codigo: 3, mensaje: `Usuario con correo ${correo} no encontrado` });
+      res.status(200).json({ mensaje: `Usuario ${usuarioEliminado.nombre} eliminado con éxito`, codigo: 0 });
     })
-    .catch(error => res.status(200).json(errorResponse("Error al eliminar usuario", error.message, 5)));
+    .catch(error => res.status(200).json({ codigo: 5, mensaje: "Error al eliminar usuario", detalle: error.message }));
 };
 
+// ---------------- ACTUALIZAR USUARIO ----------------
 const actualizarUsuario = (req, res) => {
   let { correo, password, telefono, nombre, app, apm, rol, estado } = req.body;
 
@@ -99,7 +104,7 @@ const actualizarUsuario = (req, res) => {
   rol = rol?.trim();
   estado = estado?.trim();
 
-  if (!correo) return res.status(200).json(errorResponse("El correo del usuario a actualizar es requerido", null, 2));
+  if (!correo) return res.status(200).json({ codigo: 2, mensaje: "El correo del usuario a actualizar es requerido" });
 
   const errores = [];
 
@@ -112,7 +117,7 @@ const actualizarUsuario = (req, res) => {
   if (rol && typeof rol !== 'string') errores.push("El rol solo puede contener texto");
   if (estado && typeof estado !== 'string') errores.push("El estado solo puede contener texto");
 
-  if (errores.length > 0) return res.status(200).json(errorResponse("Errores de validación", errores, 2));
+  if (errores.length > 0) return res.status(200).json({ codigo: 2, mensaje: "Errores de validación", errores });
 
   const datosActualizar = {};
   const hashPromise = password ? bcrypt.hash(password, 10).then(hash => { datosActualizar.password = hash; }) : Promise.resolve();
@@ -129,10 +134,10 @@ const actualizarUsuario = (req, res) => {
       return UsuarioService.actualizar(correo, datosActualizar);
     })
     .then(usuarioActualizado => {
-      if (!usuarioActualizado) return res.status(200).json(errorResponse(`Usuario con correo ${correo} no encontrado`, null, 3));
-      res.json({ mensaje: "Usuario actualizado con éxito", usuario: usuarioActualizado, codigo: 0 });
+      if (!usuarioActualizado) return res.status(200).json({ codigo: 3, mensaje: `Usuario con correo ${correo} no encontrado` });
+      res.status(200).json({ mensaje: "Usuario actualizado con éxito", usuario: usuarioActualizado, codigo: 0 });
     })
-    .catch(error => res.status(200).json(errorResponse("Error al actualizar usuario", error.message, 5)));
+    .catch(error => res.status(200).json({ codigo: 5, mensaje: "Error al actualizar usuario", detalle: error.message }));
 };
 
 module.exports = {
