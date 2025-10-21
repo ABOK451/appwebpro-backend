@@ -1,9 +1,9 @@
 function errorResponse(mensaje, detalle = null, codigo = 1) {
   return {
-    codigo,        // código general de la respuesta
+    codigo,        
     error: {
       mensaje,
-      detalle       // puede ser string, objeto o arreglo de errores
+      detalle       
     }
   };
 }
