@@ -1,8 +1,8 @@
 const pool = require('../infrastructure/db');
 const Producto = require('../domain/producto');
 const InventarioReportService = require('../application/inventarioReporteService');
-const { formatDate } = require('../infrastructure/utils/dateUtils');
-const { LOW_STOCK_THRESHOLD } = require('../config/constants');
+const { formatDate } = require('../utils/dateUtils'); // ✅ utils de fecha
+const { LOW_STOCK_THRESHOLD } = require('../config/constants'); // ✅ constante de bajo stock
 
 class ProductoService {
   static validarCategoria(id_categoria) {
@@ -53,55 +53,41 @@ class ProductoService {
           console.error('Error al recalcular stock:', err);
         }
 
+        // Formatear fecha
         nuevo.fecha_ingreso = formatDate(nuevo.fecha_ingreso);
 
+        // Agregar alerta de bajo stock
         const alertaBajoStock = nuevo.stock <= LOW_STOCK_THRESHOLD;
 
         return { producto: nuevo, alertaBajoStock };
       });
   }
 
-  static listar(filtros = {}) {
-      const { nombre, categoria, proveedor, codigo } = filtros;
-      const condiciones = [];
-      const valores = [];
+  static listar() {
+    return pool.query(`
+      SELECT p.*, c.nombre AS categoria_nombre
+      FROM productos p
+      LEFT JOIN categorias c ON p.id_categoria = c.id
+      ORDER BY p.fecha_ingreso DESC
+    `)
+      .then(r => r.rows.map(p => ({ ...p, fecha_ingreso: formatDate(p.fecha_ingreso) })));
+  }
 
-      if (nombre) {
-        valores.push(`%${nombre.toLowerCase()}%`);
-        condiciones.push(`LOWER(p.nombre) LIKE $${valores.length}`);
-      }
-
-      if (categoria) {
-        valores.push(`%${categoria.toLowerCase()}%`);
-        condiciones.push(`LOWER(c.nombre) LIKE $${valores.length}`);
-      }
-
-      if (proveedor) {
-        valores.push(`%${proveedor.toLowerCase()}%`);
-        condiciones.push(`LOWER(p.proveedor) LIKE $${valores.length}`);
-      }
-
-      if (codigo) {
-        valores.push(codigo);
-        condiciones.push(`p.codigo = $${valores.length} OR p.id = $${valores.length}`);
-      }
-
-      let query = `
-        SELECT p.*, c.nombre AS categoria_nombre
-        FROM productos p
-        LEFT JOIN categorias c ON p.id_categoria = c.id
-      `;
-
-      if (condiciones.length > 0) {
-        query += " WHERE " + condiciones.join(" AND ");
-      }
-
-      query += " ORDER BY p.fecha_ingreso DESC";
-
-      return pool.query(query, valores)
-        .then(r => r.rows.map(p => ({ ...p, fecha_ingreso: formatDate(p.fecha_ingreso) })));
-}
-
+  static listarPorCampo(campo, valor) {
+    let query;
+    switch (campo) {
+      case 'nombre': query = "WHERE LOWER(p.nombre) LIKE LOWER($1)"; break;
+      case 'categoria': query = "WHERE LOWER(c.nombre) LIKE LOWER($1)"; break;
+      case 'proveedor': query = "WHERE LOWER(p.proveedor) LIKE LOWER($1)"; break;
+      default: return Promise.resolve([]);
+    }
+    return pool.query(`
+      SELECT p.*, c.nombre AS categoria_nombre
+      FROM productos p
+      LEFT JOIN categorias c ON p.id_categoria = c.id
+      ${query}`, [`%${valor}%`]
+    ).then(r => r.rows.map(p => ({ ...p, fecha_ingreso: formatDate(p.fecha_ingreso) })));
+  }
 
   static actualizar(codigo, datos) {
     return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])
@@ -140,8 +126,10 @@ class ProductoService {
         ).then(resultadoActualizado => {
           const actualizado = resultadoActualizado.rows[0];
 
+          // Formatear fecha
           actualizado.fecha_ingreso = formatDate(actualizado.fecha_ingreso);
 
+          // Verificar diferencia en cantidad o stock
           const diferencia = actualizado.cantidad - productoAnterior.cantidad;
           if (diferencia !== 0) {
             const tipo = diferencia > 0 ? 'entrada' : 'salida';
@@ -182,23 +170,6 @@ class ProductoService {
           });
       });
   }
-
-  static obtenerPorId(id_producto) {
-  return pool.query("SELECT * FROM productos WHERE codigo = $1", [id_producto])
-    .then(r => r.rows.length > 0 ? r.rows[0] : null);
-}
-
-static actualizarCantidad(id_producto, nuevaCantidad) {
-  return pool.query(
-    `UPDATE productos 
-     SET cantidad = $1
-     WHERE codigo = $2
-     RETURNING *`,
-    [nuevaCantidad, id_producto]
-  ).then(r => r.rows[0]);
-}
-
-
 }
 
 module.exports = ProductoService;
