@@ -25,7 +25,8 @@ const solicitarReset = (req, res) => {
     return res.status(200).json(errorResponse("Errores de validación", errores, 2));
   }
 
-  UsuarioService.buscarPorCorreo(correo)
+  // Retornamos la promesa completa
+  return UsuarioService.buscarPorCorreo(correo)
     .then(usuario => {
       if (!usuario) return res.status(200).json(errorResponse("Usuario no encontrado", null, 3));
 
@@ -56,7 +57,7 @@ const solicitarReset = (req, res) => {
     })
     .catch(error => {
       console.error("Error solicitarReset:", error);
-      res.status(200).json(errorResponse("Error al generar código", error.message, 3));
+      return res.status(200).json(errorResponse("Error al generar código", error.message, 3));
     });
 };
 
@@ -79,7 +80,8 @@ const resetConCodigo = (req, res) => {
 
   if (errores.length > 0) return res.status(200).json(errorResponse("Errores de validación", errores, 2));
 
-  UsuarioService.buscarPorCorreo(correoSanitizado)
+  // Retornamos la promesa completa
+  return UsuarioService.buscarPorCorreo(correoSanitizado)
     .then(usuario => {
       if (!usuario) return res.status(200).json(errorResponse("Usuario no encontrado", null, 3));
 
