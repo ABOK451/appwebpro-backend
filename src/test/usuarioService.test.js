@@ -82,6 +82,15 @@ describe('UsuarioService', () => {
         telefono: '+521234567890'
       })).rejects.toThrow('El correo ya existe, no se puede repetir');
     });
+
+    it('debe manejar errores genéricos', async () => {
+      const error = { code: '12345', message: 'error raro' };
+      pool.query.mockRejectedValue(error);
+      await expect(UsuarioService.crear({
+        correo: 'x@x.com', password: 'Aa123456!', rol: 'admin', estado:'activo',
+        nombre:'Test', app:'App', apm:'Test', telefono:'+521234567890'
+      })).rejects.toThrow('error raro');
+    });
   });
 
   // ---------------- eliminar ----------------
@@ -98,6 +107,11 @@ describe('UsuarioService', () => {
       pool.query.mockResolvedValue({ rows: [] });
       const res = await UsuarioService.eliminar({ correo: 'noexiste@a.com' });
       expect(res).toBeNull();
+    });
+
+    it('maneja error de DB', async () => {
+      pool.query.mockRejectedValue(new Error('DB fallo eliminar'));
+      await expect(UsuarioService.eliminar({ correo:'a@a.com' })).rejects.toThrow('DB fallo eliminar');
     });
   });
 
@@ -133,13 +147,23 @@ describe('UsuarioService', () => {
       const res = await UsuarioService.actualizarLogin(1, { failed_attempts:1 });
       expect(res.usuario_id).toBe(1);
     });
+
+    it('maneja error de DB', async () => {
+      pool.query.mockRejectedValue(new Error('DB fallo login'));
+      await expect(UsuarioService.actualizarLogin(1, {})).rejects.toThrow('DB fallo login');
+    });
   });
 
   // ---------------- actualizarPassword ----------------
   describe('actualizarPassword', () => {
     it('debe actualizar la contraseña', async () => {
-      pool.query.mockResolvedValue(undefined); // corregido para toBeUndefined
+      pool.query.mockResolvedValue(undefined);
       await expect(UsuarioService.actualizarPassword(1, 'hash123')).resolves.toBeUndefined();
+    });
+
+    it('maneja error de DB', async () => {
+      pool.query.mockRejectedValue(new Error('DB fallo password'));
+      await expect(UsuarioService.actualizarPassword(1, 'hash123')).rejects.toThrow('DB fallo password');
     });
   });
 
@@ -166,6 +190,18 @@ describe('UsuarioService', () => {
         .mockResolvedValueOnce({ rows: [{ usuario_id:1, token:'abc', token_expires:new Date(), sesion_activa:true, inicio_sesion:new Date(), fin_sesion:new Date() }] }); // update
       const res = await UsuarioService.guardarToken(1, 'abc');
       expect(res.token).toBe('abc');
+    });
+
+    it('retorna token existente si aún está vigente', async () => {
+      const future = new Date(Date.now() + 10000);
+      pool.query.mockResolvedValueOnce({ rows: [{ sesion_activa:true, token:'existente', token_expires: future }] });
+      const res = await UsuarioService.guardarToken(1, 'nuevoToken');
+      expect(res.token).toBe('existente');
+    });
+
+    it('maneja error de DB', async () => {
+      pool.query.mockRejectedValue(new Error('DB fallo guardarToken'));
+      await expect(UsuarioService.guardarToken(1, 'abc')).rejects.toThrow('DB fallo guardarToken');
     });
   });
 
@@ -195,8 +231,7 @@ describe('UsuarioService', () => {
     it('retorna null si expirado', async () => {
       pool.query.mockResolvedValue({ rows: [{ token:'abc', token_expires: new Date(Date.now()-10000) }] });
       const token = await UsuarioService.obtenerTokenActivo('a@a.com');
-      const tokenNull = await UsuarioService.obtenerTokenActivo('a@a.com');
-      expect(tokenNull).toBeNull();
+      expect(token).toBeNull();
     });
   });
 
