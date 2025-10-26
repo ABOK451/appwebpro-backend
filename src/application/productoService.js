@@ -1,7 +1,7 @@
 const pool = require('../infrastructure/db');
 const Producto = require('../domain/producto');
 const InventarioReportService = require('../application/inventarioReporteService');
-const { formatDate } = require('../utils/dateUtils'); // ✅ utils de fecha
+const { formatDate } = require('../infrastructure/utils/dateUtils'); // ✅ utils de fecha
 const { LOW_STOCK_THRESHOLD } = require('../config/constants'); // ✅ constante de bajo stock
 
 class ProductoService {
