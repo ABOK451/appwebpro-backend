@@ -149,6 +149,21 @@ class ProductoService {
       });
   }
 
+  static obtenerPorId(id_producto) {
+  return pool.query("SELECT * FROM productos WHERE codigo = $1", [id_producto])
+    .then(r => r.rows.length > 0 ? r.rows[0] : null);
+}
+
+static actualizarCantidad(id_producto, nuevaCantidad) {
+  return pool.query(
+    `UPDATE productos 
+     SET cantidad = $1
+     WHERE codigo = $2
+     RETURNING *`,
+    [nuevaCantidad, id_producto]
+  ).then(r => r.rows[0]);
+}
+
   static eliminar(codigo) {
     return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])
       .then(r => {

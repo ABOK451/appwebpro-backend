@@ -1,5 +1,7 @@
 const BitacoraService = require('../../application/inventarioService');
 const errorResponse = require('../../helpers/errorResponse');
+const ProductoService = require('../../application/productoService');
+
 
 const BitacoraController = {
 
@@ -140,6 +142,8 @@ const BitacoraController = {
       })
       .catch(err => res.status(200).json(errorResponse("Error al actualizar bitácora", err.message, 3)));
   },
+
+  
 
   eliminar(req, res) {
     const { id } = req.body;
