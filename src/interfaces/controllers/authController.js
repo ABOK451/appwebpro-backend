@@ -20,103 +20,122 @@ const loginUsuario = (req, res) => {
   const { correo, password } = req.body;
   const errores = [];
 
-  console.log(`[LOGIN] Intento de login recibido para correo: ${correo}`);
-
   if (!correo) errores.push({ campo: "correo", mensaje: "Correo es requerido" });
   if (!password) errores.push({ campo: "password", mensaje: "Contraseña es requerida" });
-
   if (correo && typeof correo !== 'string') errores.push({ campo: "correo", mensaje: "Correo debe ser texto" });
   if (password && typeof password !== 'string') errores.push({ campo: "password", mensaje: "Contraseña debe ser texto" });
 
-  if (correo && correo.trim() === "") errores.push({ campo: "correo", mensaje: "Correo no puede estar vacío" });
-  if (password && password.trim() === "") errores.push({ campo: "password", mensaje: "Contraseña no puede estar vacía" });
-
-  if (correo && !correoRegex.test(correo)) errores.push({ campo: "correo", mensaje: "El correo debe tener un formato válido" });
-  if (password && !passwordRegex.test(password)) errores.push({ campo: "password", mensaje: "Contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" });
-
   if (errores.length > 0) {
-    console.log(`[LOGIN] Validación fallida para ${correo}:`, errores);
-    return res.status(200).json(errorResponse("Errores de validación", errores, 2));
+    return res.status(400).json({ errores });
   }
 
-  console.log(`[LOGIN] Validación exitosa para ${correo}. Buscando usuario en DB...`);
+  console.log(`[LOGIN] Intento de login recibido para correo: ${correo}`);
+  console.log(`[LOGIN] Contraseña recibida (tipo: ${typeof password}): [longitud: ${password.length}, inicia con: "${password.slice(0, 3)}..."]`);
 
   UsuarioService.buscarPorCorreo(correo)
     .then(usuario => {
       if (!usuario) {
         console.log(`[LOGIN] Usuario no encontrado: ${correo}`);
-        return res.status(200).json(errorResponse("Usuario no encontrado", null, 3));
+        return res.status(401).json({ mensaje: "Credenciales inválidas" });
       }
 
       console.log(`[LOGIN] Usuario encontrado: ${usuario.id} - ${usuario.nombre}. Verificando bloqueo...`);
-      return isBlocked(usuario.id)
-        .then(bloqueado => {
-          if (bloqueado) {
-            console.log(`[LOGIN] Cuenta bloqueada para usuario ${usuario.id} hasta ${usuario.blocked_until}`);
-            return res.status(200).json(errorResponse(`Cuenta bloqueada hasta ${usuario.blocked_until}`, null, 3));
-          }
+      console.log(`[LOGIN] Verificando contraseña para usuario ${usuario.id}...`);
 
-          console.log(`[LOGIN] Verificando contraseña para usuario ${usuario.id}...`);
-          return bcrypt.compare(password, usuario.password)
-            .then(passwordCorrecto => {
-              if (!passwordCorrecto) {
-                console.log(`[LOGIN] Contraseña incorrecta para usuario ${usuario.id}`);
-                return loginAttempt(usuario).then(() =>
-                  res.status(200).json(errorResponse("Contraseña incorrecta", null, 2))
-                );
-              }
+      // 🔍 Detectar si la contraseña en BD no está hasheada
+      if (!usuario.password.startsWith("$2b$")) {
+        console.log(`[LOGIN] Contraseña no hasheada detectada para usuario ${usuario.id}`);
 
-              console.log(`[LOGIN] Contraseña correcta. Reseteando intentos fallidos para usuario ${usuario.id}`);
-              return UsuarioService.actualizarLogin(usuario.id, { failed_attempts: 0, blocked_until: null })
-                .then(() => {
-                  const ipParaPrueba = req.ip === "::1" ? "8.8.8.8" : req.ip;
-                  console.log(`[LOGIN] Obteniendo ubicación por IP: ${ipParaPrueba}`);
+        if (usuario.password === password) {
+          console.log(`[LOGIN] Contraseña coincide en texto plano. Hasheando y corrigiendo en DB...`);
+          const hash = bcrypt.hashSync(password, 10);
 
-                  return obtenerUbicacionIP(ipParaPrueba)
-                    .then(ubicacion => {
-                      if (ubicacion?.lat && ubicacion?.lng) {
-                        console.log(`[LOGIN] Ubicación obtenida: lat=${ubicacion.lat}, lng=${ubicacion.lng}. Guardando...`);
-                        return AuthService.guardarUbicacion(usuario.id, ubicacion.lat, ubicacion.lng);
-                      } else {
-                        console.log(`[LOGIN] No se obtuvo ubicación para ${usuario.id}`);
-                      }
-                    })
-                    .then(() => {
-                      const codigo = Math.floor(100000 + Math.random() * 900000).toString();
-                      const expira = new Date(Date.now() + 5 * 60000);
-                      console.log(`[LOGIN] Generando código 2FA para usuario ${usuario.id}: ${codigo} (expira: ${expira})`);
-
-                      return RecuperarService.guardarCodigoReset(usuario.id, codigo, expira)
-                        .then(() => hayInternet().then(internet => {
-                          if (internet) {
-                            console.log(`[LOGIN] Enviando correo 2FA a ${correo}`);
-                            return transporter.sendMail({
-                              from: `"Soporte App" <${process.env.EMAIL_USER}>`,
-                              to: correo,
-                              subject: "Código de verificación 2FA",
-                              text: `Tu código de autenticación es: ${codigo}. Válido por 5 minutos.`,
-                              html: `<p>Hola ${usuario.nombre},</p>
-                                     <p>Tu código de autenticación es: <b>${codigo}</b></p>
-                                     <p>Válido por 5 minutos.</p>`
-                            }).then(() => {
-                              console.log(`[LOGIN] Correo 2FA enviado a ${correo}`);
-                              res.json({ mensaje: "Código de verificación enviado", codigo: 0 });
-                            });
-                          } else {
-                            console.log(`[OFFLINE MODE] Código OTP para ${correo}: ${codigo}`);
-                            return res.json({ mensaje: "Código de verificación generado en modo offline", otp: codigo, codigo: 0 });
-                          }
-                        }));
-                    });
-                });
+          return UsuarioService.actualizarLogin(usuario.id, { password: hash })
+            .then(() => {
+              console.log(`[LOGIN] Contraseña actualizada correctamente para usuario ${usuario.id}`);
+              // Continuar flujo con la comparación normal
+              return bcrypt.compare(password, hash);
+            })
+            .then(passwordCorrecto => manejarResultadoPassword(passwordCorrecto, usuario, req, res))
+            .catch(error => {
+              console.error(`[LOGIN] Error al actualizar contraseña para usuario ${usuario.id}: ${error.message}`);
+              return res.status(500).json({ mensaje: "Error interno al actualizar la contraseña" });
             });
+        } else {
+          console.log(`[LOGIN] Contraseña en texto plano no coincide. Falla de autenticación.`);
+          return res.status(401).json({ mensaje: "Credenciales inválidas" });
+        }
+      }
+
+      // Comparación normal si ya está hasheada
+      return bcrypt.compare(password, usuario.password)
+        .then(passwordCorrecto => manejarResultadoPassword(passwordCorrecto, usuario, req, res))
+        .catch(error => {
+          console.error(`[LOGIN] Error al comparar contraseñas: ${error.message}`);
+          return res.status(500).json({ mensaje: "Error interno al verificar contraseña" });
         });
     })
     .catch(error => {
-      console.error(`[LOGIN] Error loginUsuario para ${correo}:`, error);
-      return res.status(200).json(errorResponse("Error al iniciar sesión", error.message, 3));
+      console.error(`[LOGIN] Error al buscar usuario: ${error.message}`);
+      return res.status(500).json({ mensaje: "Error interno del servidor" });
     });
 };
+
+// 🧩 Función auxiliar para manejar el resultado del bcrypt
+function manejarResultadoPassword(passwordCorrecto, usuario, req, res) {
+  console.log(`[LOGIN] Resultado comparación bcrypt: ${passwordCorrecto}`);
+
+  if (!passwordCorrecto) {
+    console.log(`[LOGIN] Contraseña incorrecta para usuario ${usuario.id}`);
+    return res.status(401).json({ mensaje: "Credenciales inválidas" });
+  }
+
+  console.log(`[LOGIN] Contraseña correcta. Reseteando intentos fallidos para usuario ${usuario.id}`);
+
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  console.log(`[LOGIN] Obteniendo ubicación por IP: ${ip}`);
+
+  return obtenerUbicacionIP(ip)
+    .then(ubicacion => {
+      if (!ubicacion || ubicacion.bogon) {
+        console.log(`No se pudo obtener ubicación de ipinfo: ${JSON.stringify(ubicacion)}`);
+      } else {
+        console.log(`[LOGIN] Ubicación detectada: ${ubicacion.ciudad}, ${ubicacion.region}, ${ubicacion.pais}`);
+      }
+
+      console.log(`[LOGIN] Generando token JWT para usuario ${usuario.id}`);
+      const token = jwt.sign(
+        { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
+        process.env.JWT_SECRET,
+        { expiresIn: '2h' }
+      );
+
+      return res.status(200).json({
+        mensaje: "Inicio de sesión exitoso",
+        token,
+        usuario: {
+          id: usuario.id,
+          nombre: usuario.nombre,
+          correo: usuario.correo,
+          rol: usuario.rol
+        },
+        ubicacion: ubicacion || "No disponible"
+      });
+    })
+    .catch(err => {
+      console.error(`[LOGIN] Error al obtener ubicación: ${err.message}`);
+      return res.status(200).json({
+        mensaje: "Inicio de sesión exitoso (sin ubicación)",
+        usuario: {
+          id: usuario.id,
+          nombre: usuario.nombre,
+          correo: usuario.correo,
+          rol: usuario.rol
+        }
+      });
+    });
+}
+
 
 
 const verificarCodigo = (req, res) => {
