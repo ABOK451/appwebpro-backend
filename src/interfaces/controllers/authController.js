@@ -91,16 +91,13 @@ const loginUsuario = (req, res) => {
             }
           }
 
-          // Si ya está hasheada, comparar normalmente
-          // 🔍 Debug paso a paso de bcrypt
-const saltFromHash = usuario.password.substring(0, 29); // extrae la sal
-console.log('[DEBUG] Salt extraída del hash:', saltFromHash);
+// Comparación correcta con bcrypt
+const passwordCorrecto = bcrypt.compareSync(password, usuario.password);
+console.log('[DEBUG] Comparación correcta con bcrypt.compareSync:', passwordCorrecto);
 
-const hashTemporal = bcrypt.hashSync(password, saltFromHash);
-console.log('[DEBUG] Hash generado temporalmente con la contraseña ingresada:', hashTemporal);
+// Continuar con el flujo normal
+return manejarResultadoPassword(passwordCorrecto, usuario, req, res);
 
-const resultadoComparacion = hashTemporal === usuario.password;
-console.log('[DEBUG] Comparación final (temporal === hash BD):', resultadoComparacion);
 
 // Continuar con el flujo normal
 return manejarResultadoPassword(resultadoComparacion, usuario, req, res);
