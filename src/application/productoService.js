@@ -74,21 +74,38 @@ class ProductoService {
       .then(r => r.rows.map(p => ({ ...p, fecha_ingreso: formatDate(p.fecha_ingreso) })));
   }
 
-  static listarPorCampo(campo, valor) {
-    let query;
-    switch (campo) {
-      case 'nombre': query = "WHERE LOWER(p.nombre) LIKE LOWER($1)"; break;
-      case 'categoria': query = "WHERE LOWER(c.nombre) LIKE LOWER($1)"; break;
-      case 'proveedor': query = "WHERE LOWER(p.proveedor) LIKE LOWER($1)"; break;
-      default: return Promise.resolve([]);
+  static listarPorCampos({ nombre, categoria, proveedor }) {
+    let conditions = [];
+    let values = [];
+    let idx = 1;
+
+    if (nombre) {
+      conditions.push(`LOWER(p.nombre) LIKE LOWER($${idx})`);
+      values.push(`%${nombre}%`);
+      idx++;
     }
+    if (categoria) {
+      conditions.push(`LOWER(c.nombre) LIKE LOWER($${idx})`);
+      values.push(`%${categoria}%`);
+      idx++;
+    }
+    if (proveedor) {
+      conditions.push(`LOWER(p.proveedor) LIKE LOWER($${idx})`);
+      values.push(`%${proveedor}%`);
+      idx++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
     return pool.query(`
       SELECT p.*, c.nombre AS categoria_nombre
       FROM productos p
       LEFT JOIN categorias c ON p.id_categoria = c.id
-      ${query}`, [`%${valor}%`]
-    ).then(r => r.rows.map(p => ({ ...p, fecha_ingreso: formatDate(p.fecha_ingreso) })));
+      ${whereClause}
+      ORDER BY p.fecha_ingreso DESC
+    `, values).then(r => r.rows.map(p => ({ ...p, fecha_ingreso: formatDate(p.fecha_ingreso) })));
   }
+
 
   static actualizar(codigo, datos) {
     return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])

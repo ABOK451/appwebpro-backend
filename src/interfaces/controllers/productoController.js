@@ -56,17 +56,50 @@ const crearProducto = (req, res) => {
 // LISTAR PRODUCTOS
 // ---------------------------------------------------------------------
 const listarProductos = (req, res) => {
-  const filtros = {
-    nombre: req.body.nombre,
-    categoria: req.body.categoria,
-    proveedor: req.body.proveedor,
-    codigo: req.body.codigo
-  };
-
-  ProductoService.listar(filtros)
-    .then(productos => res.json({ codigo: 0, mensaje: "Listado de productos", productos }))
-    .catch(error => res.status(200).json(errorResponse("Error al listar productos", error.message, 3)));
+  ProductoService.listar()
+    .then(productos => {
+      res.status(200).json({
+        codigo: 0,
+        mensaje: "Listado de productos",
+        productos,
+      });
+    })
+    .catch(error => {
+      console.error(error);
+      res.status(500).json({
+        codigo: 1,
+        mensaje: "Error al listar productos",
+      });
+    });
 };
+
+const listarPorCampo = (req, res) => {
+  const { nombre, categoria, proveedor } = req.body;
+
+  if (!nombre && !categoria && !proveedor) {
+    return res.status(400).json({
+      codigo: 2,
+      error: { mensaje: "Debe enviar al menos un campo para filtrar", detalle: null }
+    });
+  }
+
+  ProductoService.listarPorCampos({ nombre, categoria, proveedor })
+    .then(productos => {
+      res.json({
+        codigo: 0,
+        mensaje: "Productos filtrados correctamente",
+        productos
+      });
+    })
+    .catch(error => {
+      res.status(500).json({
+        codigo: 3,
+        error: { mensaje: "Error al filtrar productos", detalle: error.message }
+      });
+    });
+};
+
+
 
 
 // ---------------------------------------------------------------------
@@ -88,7 +121,14 @@ const actualizarProducto = (req, res) => {
     return res.status(200).json(errorResponse("Errores de validación", errores, 2));
 
   ProductoService.actualizar(codigo, { nombre, descripcion, cantidad, stock, precio, proveedor, id_categoria, imagen })
-    .then(producto => res.json({ codigo: 0, mensaje: "Producto actualizado correctamente", producto }))
+    .then(({ producto, alertaBajoStock }) => {
+      res.json({
+        codigo: 0,
+        mensaje: "Producto actualizado correctamente",
+        producto,
+        alertaBajoStock
+      });
+    })
     .catch(error => {
       const msg = error.mensaje || "Error al actualizar producto";
       res.status(200).json(errorResponse(msg, null, 3));
@@ -120,5 +160,6 @@ module.exports = {
   crearProducto,
   listarProductos,
   actualizarProducto,
-  eliminarProducto
+  eliminarProducto,
+  listarPorCampo
 };
