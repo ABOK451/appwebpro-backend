@@ -141,3 +141,4 @@ class InventarioReportService {
 }
 
 module.exports = InventarioReportService;
+//hola
