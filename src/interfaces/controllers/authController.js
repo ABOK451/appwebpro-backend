@@ -21,6 +21,7 @@ const loginUsuario = (req, res) => {
   const errores = [];
 
   console.log(`[LOGIN] Intento de login recibido para correo: ${correo}`);
+  console.log(`[LOGIN] Contraseña recibida (tipo: ${typeof password}):`, password ? `[longitud: ${password.length}, inicia con: "${password.slice(0, 3)}..."]` : password);
 
   if (!correo) errores.push({ campo: "correo", mensaje: "Correo es requerido" });
   if (!password) errores.push({ campo: "password", mensaje: "Contraseña es requerida" });
@@ -57,8 +58,13 @@ const loginUsuario = (req, res) => {
           }
 
           console.log(`[LOGIN] Verificando contraseña para usuario ${usuario.id}...`);
+          console.log(`[LOGIN] Contraseña en texto plano (usuario) → [longitud: ${password.length}, inicia con: "${password.slice(0, 3)}..."]`);
+          console.log(`[LOGIN] Contraseña almacenada (hash) → ${usuario.password.slice(0, 15)}...`);
+
           return bcrypt.compare(password, usuario.password)
             .then(passwordCorrecto => {
+              console.log(`[LOGIN] Resultado comparación bcrypt: ${passwordCorrecto}`);
+
               if (!passwordCorrecto) {
                 console.log(`[LOGIN] Contraseña incorrecta para usuario ${usuario.id}`);
                 return loginAttempt(usuario).then(() =>
@@ -117,6 +123,7 @@ const loginUsuario = (req, res) => {
       return res.status(200).json(errorResponse("Error al iniciar sesión", error.message, 3));
     });
 };
+
 
 
 const verificarCodigo = (req, res) => {
