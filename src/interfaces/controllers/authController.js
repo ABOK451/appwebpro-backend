@@ -60,6 +60,8 @@ const loginUsuario = (req, res) => {
           console.log(`[LOGIN] Verificando contraseña para usuario ${usuario.id}...`);
           console.log(`[LOGIN] Contraseña en texto plano (usuario) → [longitud: ${password.length}, inicia con: "${password.slice(0, 3)}..."]`);
           console.log(`[LOGIN] Contraseña almacenada (hash o texto) → ${usuario.password.slice(0, 15)}...`);
+          console.log(`[DEBUG] Contraseña recibida literal (entre comillas): "${password}"`);
+console.log(`[DEBUG] Longitud exacta de la contraseña: ${password.length}`);
 
           // 🔍 Detectar si la contraseña guardada no está hasheada
           if (!usuario.password.startsWith("$2b$")) {
