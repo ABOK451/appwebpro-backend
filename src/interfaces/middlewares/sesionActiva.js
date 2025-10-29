@@ -68,58 +68,49 @@ const verificarSesionActiva = async (req, res, next) => {
   }
 };
 
-const extenderSesion = async (req, res, next) => {
+ const extenderSesion = async (req, res, next) => {
   try {
-    const token = req.headers['authorization']?.split(' ')[1]; 
-    console.log("[extenderSesion] Authorization header:", req.headers['authorization']);
+    const token = req.headers['authorization']?.split(' ')[1];
 
     if (!token) {
-      console.log("[extenderSesion] No se proporcionó token");
-      return res.status(200).json(
-        errorResponse("No se pudo obtener la sesión. Necesitas iniciar sesión.", null, 1)
-      );
+      return res.status(200).json(errorResponse("No se pudo obtener la sesión. Necesitas iniciar sesión.", null, 1));
     }
 
     const usuario = await UsuarioService.buscarPorToken(token);
-    console.log("[extenderSesion] Usuario obtenido por token:", usuario);
 
     if (!usuario || !usuario.sesion_activa) {
-      console.log("[extenderSesion] Usuario no encontrado o sesión inactiva");
-      return res.status(200).json(
-        errorResponse("La sesión no está activa. Necesitas iniciar sesión nuevamente.", null, 2)
-      );
+      return res.status(200).json(errorResponse("La sesión no está activa. Necesitas iniciar sesión nuevamente.", null, 2));
     }
 
     const ahora = new Date();
 
     if (usuario.fin_sesion && usuario.fin_sesion > ahora) {
-      // Extendemos la sesión +3 min
-      const nuevaFin = new Date(ahora.getTime() + 3 * 60000);
+      // ✅ Sumamos 3 minutos al fin_sesion existente
+      const nuevaFin = new Date(usuario.fin_sesion.getTime() + 3 * 60000);
       await UsuarioService.actualizarLogin(usuario.id, { fin_sesion: nuevaFin });
-      console.log(`[extenderSesion] Sesión extendida hasta ${nuevaFin}`);
 
-      // Guardamos datos en res.locals para que el controller pueda usarlos
-      res.locals.usuario = usuario;
-      res.locals.tiempoRestanteMin = Math.ceil((nuevaFin - ahora) / 60000);
+      const tiempoRestanteMin = Math.ceil((nuevaFin.getTime() - ahora.getTime()) / 60000);
 
-      next(); // dejamos que el controller maneje la respuesta
+      // Sobrescribimos res.json para inyectar tiempo_restante_min
+      const originalJson = res.json.bind(res);
+      res.json = (body) => {
+        if (body && typeof body === 'object') {
+          body.tiempo_restante_min = tiempoRestanteMin;
+        }
+        return originalJson(body);
+      };
+
+      next();
     } else {
-      await UsuarioService.actualizarLogin(usuario.id, { 
-        sesion_activa: false, 
-        fin_sesion: null 
-      });
-      console.log("[extenderSesion] Sesión expiró, se cerró correctamente");
-      return res.status(200).json(
-        errorResponse("La sesión expiró. Necesitas iniciar sesión nuevamente.", null, 3)
-      );
+      await UsuarioService.actualizarLogin(usuario.id, { sesion_activa: false, fin_sesion: null });
+      return res.status(200).json(errorResponse("La sesión expiró. Necesitas iniciar sesión nuevamente.", null, 3));
     }
 
   } catch (err) {
     console.error("[extenderSesion] Error:", err);
-    return res.status(200).json(
-      errorResponse("Error al validar la sesión", err.message, 5)
-    );
+    return res.status(200).json(errorResponse("Error al validar la sesión", err.message, 5));
   }
 };
+
 
 module.exports = { verificarSesionActiva, extenderSesion };

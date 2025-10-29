@@ -190,8 +190,49 @@ const verificarCodigo = (req, res) => {
       return res.status(200).json(errorResponse("Error al verificar código", error.message, 3));
     });
 };
+const logout = (req, res) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+
+  if (!token) {
+    return res.status(200).json({
+      mensaje: "No se proporcionó token",
+      codigo: 2
+    });
+  }
+
+  // Buscar usuario por token
+  UsuarioService.buscarPorToken(token)
+    .then(usuario => {
+      if (!usuario || !usuario.sesion_activa) {
+        return res.status(200).json({
+          mensaje: "Sesión ya estaba cerrada o token inválido",
+          codigo: 3
+        });
+      }
+
+      // Actualizar login: cerrar sesión
+      return UsuarioService.actualizarLogin(usuario.id, {
+        sesion_activa: false,
+        fin_sesion: new Date()
+      }).then(() => {
+        res.status(200).json({
+          mensaje: "Sesión cerrada correctamente",
+          codigo: 0
+        });
+      });
+    })
+    .catch(error => {
+      console.error("[logout] Error:", error);
+      res.status(200).json({
+        mensaje: "Error al cerrar sesión",
+        codigo: 5,
+        error: error.message
+      });
+    });
+};
 
 module.exports = {
   loginUsuario,
-  verificarCodigo
+  verificarCodigo,
+  logout 
 };
