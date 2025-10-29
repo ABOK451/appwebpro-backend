@@ -21,7 +21,6 @@ const loginUsuario = (req, res) => {
   const errores = [];
 
   console.log(`[LOGIN] Intento de login recibido para correo: ${correo}`);
-  console.log(`[LOGIN] Contraseña recibida (tipo: ${typeof password}):`, password ? `[longitud: ${password.length}, inicia con: "${password.slice(0, 3)}..."]` : password);
 
   if (!correo) errores.push({ campo: "correo", mensaje: "Correo es requerido" });
   if (!password) errores.push({ campo: "password", mensaje: "Contraseña es requerida" });
@@ -58,52 +57,59 @@ const loginUsuario = (req, res) => {
           }
 
           console.log(`[LOGIN] Verificando contraseña para usuario ${usuario.id}...`);
-          console.log(`[LOGIN] Contraseña en texto plano (usuario) → [longitud: ${password.length}, inicia con: "${password.slice(0, 3)}..."]`);
-          console.log(`[LOGIN] Contraseña almacenada (hash o texto) → ${usuario.password.slice(0, 15)}...`);
-          console.log(`[DEBUG] Contraseña recibida literal (entre comillas): "${password}"`);
-console.log(`[DEBUG] Longitud exacta de la contraseña: ${password.length}`);
+          return bcrypt.compare(password, usuario.password)
+            .then(passwordCorrecto => {
+              if (!passwordCorrecto) {
+                console.log(`[LOGIN] Contraseña incorrecta para usuario ${usuario.id}`);
+                return loginAttempt(usuario).then(() =>
+                  res.status(200).json(errorResponse("Contraseña incorrecta", null, 2))
+                );
+              }
 
-          // 🔍 Detectar si la contraseña guardada no está hasheada
-          if (!usuario.password.startsWith("$2b$")) {
-            console.log(`[LOGIN] ⚠️ Contraseña no hasheada detectada para usuario ${usuario.id}`);
-
-            if (usuario.password === password) {
-              console.log(`[LOGIN] Contraseña coincide en texto plano. Hasheando y actualizando en DB...`);
-              const hash = bcrypt.hashSync(password, 10);
-
-              return UsuarioService.actualizarLogin(usuario.id, { password: hash })
+              console.log(`[LOGIN] Contraseña correcta. Reseteando intentos fallidos para usuario ${usuario.id}`);
+              return UsuarioService.actualizarLogin(usuario.id, { failed_attempts: 0, blocked_until: null })
                 .then(() => {
-                  console.log(`[LOGIN] Contraseña actualizada correctamente en la base de datos para usuario ${usuario.id}`);
-                  // Comparar nuevamente usando el hash recién generado
-                  return bcrypt.compare(password, hash);
-                })
-                .then(passwordCorrecto => {
-                  console.log(`[LOGIN] Resultado comparación post-hash: ${passwordCorrecto}`);
-                  return manejarResultadoPassword(passwordCorrecto, usuario, req, res);
-                })
-                .catch(error => {
-                  console.error(`[LOGIN] Error al actualizar contraseña para usuario ${usuario.id}:`, error);
-                  return res.status(200).json(errorResponse("Error al actualizar contraseña", error.message, 3));
+                  const ipParaPrueba = req.ip === "::1" ? "8.8.8.8" : req.ip;
+                  console.log(`[LOGIN] Obteniendo ubicación por IP: ${ipParaPrueba}`);
+
+                  return obtenerUbicacionIP(ipParaPrueba)
+                    .then(ubicacion => {
+                      if (ubicacion?.lat && ubicacion?.lng) {
+                        console.log(`[LOGIN] Ubicación obtenida: lat=${ubicacion.lat}, lng=${ubicacion.lng}. Guardando...`);
+                        return AuthService.guardarUbicacion(usuario.id, ubicacion.lat, ubicacion.lng);
+                      } else {
+                        console.log(`[LOGIN] No se obtuvo ubicación para ${usuario.id}`);
+                      }
+                    })
+                    .then(() => {
+                      const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+                      const expira = new Date(Date.now() + 5 * 60000);
+                      console.log(`[LOGIN] Generando código 2FA para usuario ${usuario.id}: ${codigo} (expira: ${expira})`);
+
+                      return RecuperarService.guardarCodigoReset(usuario.id, codigo, expira)
+                        .then(() => hayInternet().then(internet => {
+                          if (internet) {
+                            console.log(`[LOGIN] Enviando correo 2FA a ${correo}`);
+                            return transporter.sendMail({
+                              from: `"Soporte App" <${process.env.EMAIL_USER}>`,
+                              to: correo,
+                              subject: "Código de verificación 2FA",
+                              text: `Tu código de autenticación es: ${codigo}. Válido por 5 minutos.`,
+                              html: `<p>Hola ${usuario.nombre},</p>
+                                     <p>Tu código de autenticación es: <b>${codigo}</b></p>
+                                     <p>Válido por 5 minutos.</p>`
+                            }).then(() => {
+                              console.log(`[LOGIN] Correo 2FA enviado a ${correo}`);
+                              res.json({ mensaje: "Código de verificación enviado", codigo: 0 });
+                            });
+                          } else {
+                            console.log(`[OFFLINE MODE] Código OTP para ${correo}: ${codigo}`);
+                            return res.json({ mensaje: "Código de verificación generado en modo offline", otp: codigo, codigo: 0 });
+                          }
+                        }));
+                    });
                 });
-            } else {
-              console.log(`[LOGIN] ❌ Contraseña en texto plano no coincide. Fallo de autenticación.`);
-              return loginAttempt(usuario).then(() =>
-                res.status(200).json(errorResponse("Contraseña incorrecta", null, 2))
-              );
-            }
-          }
-
-// Comparación correcta con bcrypt
-const passwordCorrecto = bcrypt.compareSync(password, usuario.password);
-console.log('[DEBUG] Comparación correcta con bcrypt.compareSync:', passwordCorrecto);
-
-// Continuar con el flujo normal
-return manejarResultadoPassword(passwordCorrecto, usuario, req, res);
-
-
-// Continuar con el flujo normal
-return manejarResultadoPassword(resultadoComparacion, usuario, req, res);
-
+            });
         });
     })
     .catch(error => {
@@ -111,60 +117,6 @@ return manejarResultadoPassword(resultadoComparacion, usuario, req, res);
       return res.status(200).json(errorResponse("Error al iniciar sesión", error.message, 3));
     });
 };
-
-// 🔧 Manejador cuando ya se sabe si la contraseña fue correcta
-function manejarResultadoPassword(passwordCorrecto, usuario, req, res) {
-  if (!passwordCorrecto) {
-    console.log(`[LOGIN] ❌ Contraseña incorrecta para usuario ${usuario.id}`);
-    return loginAttempt(usuario).then(() =>
-      res.status(200).json(errorResponse("Contraseña incorrecta", null, 2))
-    );
-  }
-
-  console.log(`[LOGIN] ✅ Contraseña correcta. Reseteando intentos fallidos para usuario ${usuario.id}`);
-  return UsuarioService.actualizarLogin(usuario.id, { failed_attempts: 0, blocked_until: null })
-    .then(() => {
-      const ipParaPrueba = req.ip === "::1" ? "8.8.8.8" : req.ip;
-      console.log(`[LOGIN] Obteniendo ubicación por IP: ${ipParaPrueba}`);
-
-      return obtenerUbicacionIP(ipParaPrueba)
-        .then(ubicacion => {
-          if (ubicacion?.lat && ubicacion?.lng) {
-            console.log(`[LOGIN] Ubicación obtenida: lat=${ubicacion.lat}, lng=${ubicacion.lng}. Guardando...`);
-            return AuthService.guardarUbicacion(usuario.id, ubicacion.lat, ubicacion.lng);
-          } else {
-            console.log(`[LOGIN] No se obtuvo ubicación para ${usuario.id}`);
-          }
-        })
-        .then(() => {
-          const codigo = Math.floor(100000 + Math.random() * 900000).toString();
-          const expira = new Date(Date.now() + 5 * 60000);
-          console.log(`[LOGIN] Generando código 2FA para usuario ${usuario.id}: ${codigo} (expira: ${expira})`);
-
-          return RecuperarService.guardarCodigoReset(usuario.id, codigo, expira)
-            .then(() => hayInternet().then(internet => {
-              if (internet) {
-                console.log(`[LOGIN] Enviando correo 2FA a ${usuario.correo}`);
-                return transporter.sendMail({
-                  from: `"Soporte App" <${process.env.EMAIL_USER}>`,
-                  to: usuario.correo,
-                  subject: "Código de verificación 2FA",
-                  text: `Tu código de autenticación es: ${codigo}. Válido por 5 minutos.`,
-                  html: `<p>Hola ${usuario.nombre},</p>
-                         <p>Tu código de autenticación es: <b>${codigo}</b></p>
-                         <p>Válido por 5 minutos.</p>`
-                }).then(() => {
-                  console.log(`[LOGIN] Correo 2FA enviado correctamente a ${usuario.correo}`);
-                  res.json({ mensaje: "Código de verificación enviado", codigo: 0 });
-                });
-              } else {
-                console.log(`[OFFLINE MODE] Código OTP para ${usuario.correo}: ${codigo}`);
-                return res.json({ mensaje: "Código de verificación generado en modo offline", otp: codigo, codigo: 0 });
-              }
-            }));
-        });
-    });
-}
 
 
 const verificarCodigo = (req, res) => {

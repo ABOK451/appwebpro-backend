@@ -76,7 +76,7 @@ const extenderSesion = async (req, res, next) => {
     if (!token) {
       console.log("[extenderSesion] No se proporcionó token");
       return res.status(200).json(
-        errorResponse("No se pudo obtener la sesión. Necesitas iniciar sesión.", null, 1) // 1 = sesión no iniciada
+        errorResponse("No se pudo obtener la sesión. Necesitas iniciar sesión.", null, 1)
       );
     }
 
@@ -93,16 +93,16 @@ const extenderSesion = async (req, res, next) => {
     const ahora = new Date();
 
     if (usuario.fin_sesion && usuario.fin_sesion > ahora) {
-      const nuevaFin = new Date(ahora.getTime() + 3 * 60000); // +3 min
+      // Extendemos la sesión +3 min
+      const nuevaFin = new Date(ahora.getTime() + 3 * 60000);
       await UsuarioService.actualizarLogin(usuario.id, { fin_sesion: nuevaFin });
       console.log(`[extenderSesion] Sesión extendida hasta ${nuevaFin}`);
 
-      const tiempoRestanteMin = Math.ceil((nuevaFin - ahora) / 60000);
-      req.tokenExtendido = usuario.token;
-      req.tiempoRestanteMin = tiempoRestanteMin;
+      // Guardamos datos en res.locals para que el controller pueda usarlos
+      res.locals.usuario = usuario;
+      res.locals.tiempoRestanteMin = Math.ceil((nuevaFin - ahora) / 60000);
 
-      next();
-
+      next(); // dejamos que el controller maneje la respuesta
     } else {
       await UsuarioService.actualizarLogin(usuario.id, { 
         sesion_activa: false, 
