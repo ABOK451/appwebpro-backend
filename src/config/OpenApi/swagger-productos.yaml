@@ -8,6 +8,8 @@ servers:
 tags:
   - name: Productos
     description: Operaciones relacionadas con productos
+  - name: Categorías
+    description: Operaciones relacionadas con categorías
 
 components:
   securitySchemes:
@@ -15,22 +17,23 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
   schemas:
     Producto:
       type: object
       properties:
         codigo:
           type: string
-          example: "CAM123"
+          example: "PIZ123"
         nombre:
           type: string
-          example: "Camiseta"
+          example: "Pizza Pepperoni"
         descripcion:
           type: string
-          example: "Camiseta de algodón"
+          example: "Pizza grande con pepperoni y queso extra"
         cantidad:
           type: integer
-          example: 10
+          example: 12
         stock:
           type: integer
           example: 5
@@ -40,21 +43,22 @@ components:
           example: 199.99
         proveedor:
           type: string
-          example: "Proveedor S.A."
+          example: "Pizzeria Italia"
         id_categoria:
           type: integer
           example: 1
         categoria_nombre:
           type: string
-          example: "Ropa"
+          example: "Pizzas"
         imagen:
           type: string
-          example: "https://imagen.com/camiseta.png"
+          example: "https://imagenes.com/pizza-pepperoni.png"
         fecha_ingreso:
           type: string
           format: date-time
           example: "2025-10-06T18:00:00Z"
-    Categoria:   # <-- Agrega esto aquí
+
+    Categoria:
       type: object
       properties:
         id:
@@ -62,10 +66,29 @@ components:
           example: 1
         nombre:
           type: string
-          example: "Electrónica"
+          example: "Pizzas"
       required:
         - id
         - nombre
+
+    FiltrosProductos:
+      type: object
+      properties:
+        categorias:
+          type: array
+          items:
+            type: string
+          example: ["Pizzas", "Bebidas"]
+        proveedores:
+          type: array
+          items:
+            type: string
+          example: ["Pizzeria Italia", "Bebidas Coca-Cola"]
+        nombres:
+          type: array
+          items:
+            type: string
+          example: ["Pizza Pepperoni", "Pizza Margarita"]
 
 paths:
   /productos/crear:
@@ -107,7 +130,7 @@ paths:
         - bearerAuth: []
       responses:
         '200':
-          description: Lista de productos
+          description: Lista de productos obtenida correctamente
           content:
             application/json:
               schema:
@@ -123,6 +146,66 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Producto'
+
+  /productos/filtrar:
+    post:
+      tags:
+        - Productos
+      summary: Filtrar productos por nombre, categoría o proveedor (flexible)
+      description: Permite filtrar por uno, dos o los tres campos. Los campos que no se envíen se ignoran.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                  example: "Pepperoni"
+                categoria:
+                  type: string
+                  example: "Pizzas"
+                proveedor:
+                  type: string
+                  example: "Pizzeria Italia"
+      responses:
+        '200':
+          description: Productos filtrados correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: integer
+                    example: 0
+                  mensaje:
+                    type: string
+                    example: "Productos filtrados correctamente"
+                  productos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Producto'
+        '400':
+          description: Error de filtrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: integer
+                    example: 2
+                  error:
+                    type: object
+                    properties:
+                      mensaje:
+                        type: string
+                        example: "Campo de filtrado no válido"
+                      detalle:
+                        type: string
+                        nullable: true
 
   /productos/actualizar:
     put:
@@ -142,13 +225,13 @@ paths:
               properties:
                 codigo:
                   type: string
-                  example: "CAM123"
+                  example: "PIZ123"
                 nombre:
                   type: string
-                  example: "Camiseta Nueva"
+                  example: "Pizza Pepperoni Grande"
                 descripcion:
                   type: string
-                  example: "Camiseta actualizada"
+                  example: "Pizza grande con extra queso y pepperoni"
                 cantidad:
                   type: integer
                   example: 20
@@ -158,16 +241,16 @@ paths:
                 precio:
                   type: number
                   format: float
-                  example: 209.99
+                  example: 249.99
                 proveedor:
                   type: string
-                  example: "Proveedor Actualizado"
+                  example: "Pizzeria Italia"
                 id_categoria:
                   type: integer
-                  example: 2
+                  example: 1
                 imagen:
                   type: string
-                  example: "https://imagen.com/camiseta-nueva.png"
+                  example: "https://imagenes.com/pizza-pepperoni-grande.png"
       responses:
         '200':
           description: Producto actualizado correctamente
@@ -184,6 +267,9 @@ paths:
                     example: "Producto actualizado correctamente"
                   producto:
                     $ref: '#/components/schemas/Producto'
+                  alertaBajoStock:
+                    type: boolean
+                    example: false
         '404':
           description: Producto no encontrado
           content:
@@ -216,7 +302,7 @@ paths:
               properties:
                 codigo:
                   type: string
-                  example: "CAM123"
+                  example: "PIZ123"
       responses:
         '200':
           description: Producto eliminado correctamente
@@ -252,7 +338,6 @@ paths:
       tags:
         - Categorías
       summary: Listar todas las categorías disponibles
-      description: Retorna un catálogo con los IDs y nombres de todas las categorías registradas.
       responses:
         '200':
           description: Lista de categorías
@@ -273,30 +358,12 @@ paths:
                       $ref: '#/components/schemas/Categoria'
         '500':
           description: Error interno del servidor
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  codigo:
-                    type: integer
-                    example: 3
-                  error:
-                    type: object
-                    properties:
-                      codigo:
-                        type: string
-                        example: "ERROR_SERVIDOR"
-                      mensaje:
-                        type: string
-                        example: "Error al obtener las categorías"
 
   /categorias/buscar:
     post:
       tags:
         - Categorías
       summary: Buscar categoría por nombre
-      description: Devuelve el ID de la categoría cuyo nombre coincida con el enviado en el cuerpo de la petición.
       requestBody:
         required: true
         content:
@@ -308,7 +375,7 @@ paths:
               properties:
                 nombre:
                   type: string
-                  example: "Electrónica"
+                  example: "Pizzas"
       responses:
         '200':
           description: Categoría encontrada correctamente

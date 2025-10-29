@@ -1,8 +1,9 @@
 const pool = require('../infrastructure/db');
 const Producto = require('../domain/producto');
 const InventarioReportService = require('../application/inventarioReporteService');
-const { formatDate } = require('../infrastructure/utils/dateUtils'); // ✅ utils de fecha
-const { LOW_STOCK_THRESHOLD } = require('../config/constants'); // ✅ constante de bajo stock
+const { formatDate } = require('../infrastructure/utils/dateUtils');
+const { LOW_STOCK_THRESHOLD } = require('../config/constants');
+
 
 class ProductoService {
   static validarCategoria(id_categoria) {
@@ -73,21 +74,38 @@ class ProductoService {
       .then(r => r.rows.map(p => ({ ...p, fecha_ingreso: formatDate(p.fecha_ingreso) })));
   }
 
-  static listarPorCampo(campo, valor) {
-    let query;
-    switch (campo) {
-      case 'nombre': query = "WHERE LOWER(p.nombre) LIKE LOWER($1)"; break;
-      case 'categoria': query = "WHERE LOWER(c.nombre) LIKE LOWER($1)"; break;
-      case 'proveedor': query = "WHERE LOWER(p.proveedor) LIKE LOWER($1)"; break;
-      default: return Promise.resolve([]);
+  static listarPorCampos({ nombre, categoria, proveedor }) {
+    let conditions = [];
+    let values = [];
+    let idx = 1;
+
+    if (nombre) {
+      conditions.push(`LOWER(p.nombre) LIKE LOWER($${idx})`);
+      values.push(`%${nombre}%`);
+      idx++;
     }
+    if (categoria) {
+      conditions.push(`LOWER(c.nombre) LIKE LOWER($${idx})`);
+      values.push(`%${categoria}%`);
+      idx++;
+    }
+    if (proveedor) {
+      conditions.push(`LOWER(p.proveedor) LIKE LOWER($${idx})`);
+      values.push(`%${proveedor}%`);
+      idx++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
     return pool.query(`
       SELECT p.*, c.nombre AS categoria_nombre
       FROM productos p
       LEFT JOIN categorias c ON p.id_categoria = c.id
-      ${query}`, [`%${valor}%`]
-    ).then(r => r.rows.map(p => ({ ...p, fecha_ingreso: formatDate(p.fecha_ingreso) })));
+      ${whereClause}
+      ORDER BY p.fecha_ingreso DESC
+    `, values).then(r => r.rows.map(p => ({ ...p, fecha_ingreso: formatDate(p.fecha_ingreso) })));
   }
+
 
   static actualizar(codigo, datos) {
     return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])
@@ -148,21 +166,6 @@ class ProductoService {
         return { producto: actualizado, alertaBajoStock };
       });
   }
-
-  static obtenerPorId(id_producto) {
-  return pool.query("SELECT * FROM productos WHERE codigo = $1", [id_producto])
-    .then(r => r.rows.length > 0 ? r.rows[0] : null);
-}
-
-static actualizarCantidad(id_producto, nuevaCantidad) {
-  return pool.query(
-    `UPDATE productos 
-     SET cantidad = $1
-     WHERE codigo = $2
-     RETURNING *`,
-    [nuevaCantidad, id_producto]
-  ).then(r => r.rows[0]);
-}
 
   static eliminar(codigo) {
     return pool.query("SELECT * FROM productos WHERE codigo = $1", [codigo])
