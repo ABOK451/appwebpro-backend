@@ -119,17 +119,20 @@ static actualizar({ id, tipo_movimiento, cantidad, descripcion }) {
     const nuevoTipo = tipo_movimiento || tipoAntes;
 
     let diferencia = 0;
-
-    if (tipoAntes === "salida" && nuevoTipo === "salida") {
-      diferencia = cantidadAntes - nuevaCantidad;  // salida corregida
-    } else if (tipoAntes === "entrada" && nuevoTipo === "entrada") {
-      diferencia = nuevaCantidad - cantidadAntes;  // entrada corregida
+    if (tipoAntes === "entrada" && nuevoTipo === "entrada") {
+      diferencia = nuevaCantidad - cantidadAntes;
+    } else if (tipoAntes === "salida" && nuevoTipo === "salida") {
+      diferencia = cantidadAntes - nuevaCantidad;
+    } else if (tipoAntes === "entrada" && nuevoTipo === "salida") {
+      diferencia = - (cantidadAntes + nuevaCantidad);
+    } else if (tipoAntes === "salida" && nuevoTipo === "entrada") {
+      diferencia = cantidadAntes + nuevaCantidad;
     }
 
     return pool.query(
       `UPDATE productos
        SET cantidad = cantidad + $1
-       WHERE id = $2
+       WHERE codigo = $2
        RETURNING *`,
       [diferencia, id_producto]
     )
@@ -144,8 +147,9 @@ static actualizar({ id, tipo_movimiento, cantidad, descripcion }) {
         [nuevoTipo, nuevaCantidad, descripcion || null, id]
       ).then(r => r.rows[0]);
     });
-  })
+  });
 }
+
 
 
   // Eliminar registro
