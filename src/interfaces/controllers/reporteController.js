@@ -60,7 +60,16 @@ const ReportController = {
             sendPdfBuffer(res, pdfData, `${reportType}_${now}.pdf`);
           });
 
-          doc.fontSize(18).text(`Reporte: ${reportType}`, { align: 'center' });
+          const titles = {
+            mas_vendidos: 'Productos Más Vendidos',
+            bajo_stock: 'Productos con Bajo Stock',
+            inventario: 'Inventario Actual',
+            movimientos_periodo: 'Movimientos por Periodo'
+          };
+
+          const title = titles[reportType] || 'Reporte de Inventario';
+          doc.fontSize(18).text(title, { align: 'center' });
+
           doc.moveDown();
           doc.fontSize(10);
 
