@@ -2,19 +2,35 @@ const UsuarioService = require('../../application/usuarioService');
 const pool = require('../../infrastructure/db');
 const errorResponse = require('../../helpers/errorResponse');
 
+// REGEX para validar formato de correo
+const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const verificarSesionActiva = async (req, res, next) => {
   const correo = req.body?.correo;
   console.log("[verificarSesionActiva] Inicio de verificación para correo:", correo);
 
-  if (!correo) {
-    console.log("[verificarSesionActiva] FALTA_CORREO");
+  // ===== VALIDACIONES =====
+  const errores = [];
+
+  if (correo === null || correo === undefined) {
+    errores.push({ campo: "correo", mensaje: "Correo es requerido" });
+  } else if (typeof correo !== 'string') {
+    errores.push({ campo: "correo", mensaje: "Correo debe ser texto" });
+  } else if (correo.trim() === "") {
+    errores.push({ campo: "correo", mensaje: "Correo no puede estar vacío" });
+  } else if (!correoRegex.test(correo)) {
+    errores.push({ campo: "correo", mensaje: "Correo con formato inválido" });
+  }
+
+  if (errores.length > 0) {
+    console.log("[verificarSesionActiva] Validación fallida:", errores);
     return res.status(200).json(
-      errorResponse("Correo es requerido", null, 2) // 2 = validación
+      errorResponse("Errores de validación", errores, 2)
     );
   }
 
+  // ===== CONTINÚA SOLO SI TODO ESTÁ BIEN =====
   const client = await pool.connect();
-
   try {
     await client.query('BEGIN');
 
@@ -28,7 +44,7 @@ const verificarSesionActiva = async (req, res, next) => {
       await client.query('ROLLBACK');
       console.log("[verificarSesionActiva] Usuario no encontrado:", correo);
       return res.status(200).json(
-        errorResponse("Usuario no encontrado", null, 3) // 3 = no encontrado
+        errorResponse("Usuario no encontrado", null, 3)
       );
     }
 
@@ -61,7 +77,7 @@ const verificarSesionActiva = async (req, res, next) => {
     await client.query('ROLLBACK');
     console.error("[verificarSesionActiva] ERROR:", error);
     return res.status(200).json(
-      errorResponse("Error al verificar sesión activa", error.message, 5) // 5 = error servidor
+      errorResponse("Error al verificar sesión activa", error.message, 5)
     );
   } finally {
     client.release();
