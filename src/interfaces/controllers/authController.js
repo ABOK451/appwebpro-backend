@@ -22,23 +22,39 @@ const loginUsuario = (req, res) => {
 
   console.log(`[LOGIN] Intento de login recibido para correo: ${correo}`);
 
-  if (!correo) errores.push({ campo: "correo", mensaje: "Correo es requerido" });
-  if (!password) errores.push({ campo: "password", mensaje: "Contraseña es requerida" });
+  // ---------- VALIDACIONES ----------
+  if (!correo || typeof correo !== 'string' || correo.trim() === "" || !correoRegex.test(correo)) {
+    errores.push({
+      campo: "correo",
+      mensaje: !correo
+        ? "Correo es requerido"
+        : typeof correo !== 'string'
+        ? "Correo debe ser texto"
+        : correo.trim() === ""
+        ? "Correo no puede estar vacío"
+        : "El correo debe tener un formato válido"
+    });
+  }
 
-  if (correo && typeof correo !== 'string') errores.push({ campo: "correo", mensaje: "Correo debe ser texto" });
-  if (password && typeof password !== 'string') errores.push({ campo: "password", mensaje: "Contraseña debe ser texto" });
-
-  if (correo && correo.trim() === "") errores.push({ campo: "correo", mensaje: "Correo no puede estar vacío" });
-  if (password && password.trim() === "") errores.push({ campo: "password", mensaje: "Contraseña no puede estar vacía" });
-
-  if (correo && !correoRegex.test(correo)) errores.push({ campo: "correo", mensaje: "El correo debe tener un formato válido" });
-  if (password && !passwordRegex.test(password)) errores.push({ campo: "password", mensaje: "Contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" });
+  if (!password || typeof password !== 'string' || password.trim() === "" || !passwordRegex.test(password)) {
+    errores.push({
+      campo: "password",
+      mensaje: !password
+        ? "Contraseña es requerida"
+        : typeof password !== 'string'
+        ? "Contraseña debe ser texto"
+        : password.trim() === ""
+        ? "Contraseña no puede estar vacía"
+        : "Contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial"
+    });
+  }
 
   if (errores.length > 0) {
     console.log(`[LOGIN] Validación fallida para ${correo}:`, errores);
     return res.status(200).json(errorResponse("Errores de validación", errores, 2));
   }
 
+  // ---------- BÚSQUEDA Y AUTENTICACIÓN ----------
   console.log(`[LOGIN] Validación exitosa para ${correo}. Buscando usuario en DB...`);
 
   UsuarioService.buscarPorCorreo(correo)
@@ -49,6 +65,7 @@ const loginUsuario = (req, res) => {
       }
 
       console.log(`[LOGIN] Usuario encontrado: ${usuario.id} - ${usuario.nombre}. Verificando bloqueo...`);
+
       return isBlocked(usuario.id)
         .then(bloqueado => {
           if (bloqueado) {
@@ -61,9 +78,8 @@ const loginUsuario = (req, res) => {
             .then(passwordCorrecto => {
               if (!passwordCorrecto) {
                 console.log(`[LOGIN] Contraseña incorrecta para usuario ${usuario.id}`);
-                return loginAttempt(usuario).then(() =>
-                  res.status(200).json(errorResponse("Contraseña incorrecta", null, 2))
-                );
+                return loginAttempt(usuario)
+                  .then(() => res.status(200).json(errorResponse("Contraseña incorrecta", null, 2)));
               }
 
               console.log(`[LOGIN] Contraseña correcta. Reseteando intentos fallidos para usuario ${usuario.id}`);
@@ -87,26 +103,27 @@ const loginUsuario = (req, res) => {
                       console.log(`[LOGIN] Generando código 2FA para usuario ${usuario.id}: ${codigo} (expira: ${expira})`);
 
                       return RecuperarService.guardarCodigoReset(usuario.id, codigo, expira)
-                        .then(() => hayInternet().then(internet => {
-                          if (internet) {
-                            console.log(`[LOGIN] Enviando correo 2FA a ${correo}`);
-                            return transporter.sendMail({
-                              from: `"Soporte App" <${process.env.EMAIL_USER}>`,
-                              to: correo,
-                              subject: "Código de verificación 2FA",
-                              text: `Tu código de autenticación es: ${codigo}. Válido por 5 minutos.`,
-                              html: `<p>Hola ${usuario.nombre},</p>
-                                     <p>Tu código de autenticación es: <b>${codigo}</b></p>
-                                     <p>Válido por 5 minutos.</p>`
-                            }).then(() => {
-                              console.log(`[LOGIN] Correo 2FA enviado a ${correo}`);
-                              res.json({ mensaje: "Código de verificación enviado", codigo: 0 });
-                            });
-                          } else {
-                            console.log(`[OFFLINE MODE] Código OTP para ${correo}: ${codigo}`);
-                            return res.json({ mensaje: "Código de verificación generado en modo offline", otp: codigo, codigo: 0 });
-                          }
-                        }));
+                        .then(() => hayInternet()
+                          .then(internet => {
+                            if (internet) {
+                              console.log(`[LOGIN] Enviando correo 2FA a ${correo}`);
+                              return transporter.sendMail({
+                                from: `"Soporte App" <${process.env.EMAIL_USER}>`,
+                                to: correo,
+                                subject: "Código de verificación 2FA",
+                                text: `Tu código de autenticación es: ${codigo}. Válido por 5 minutos.`,
+                                html: `<p>Hola ${usuario.nombre},</p>
+                                       <p>Tu código de autenticación es: <b>${codigo}</b></p>
+                                       <p>Válido por 5 minutos.</p>`
+                              }).then(() => {
+                                console.log(`[LOGIN] Correo 2FA enviado a ${correo}`);
+                                res.json({ mensaje: "Código de verificación enviado", codigo: 0 });
+                              });
+                            } else {
+                              console.log(`[OFFLINE MODE] Código OTP para ${correo}: ${codigo}`);
+                              return res.json({ mensaje: "Código de verificación generado en modo offline", otp: codigo, codigo: 0 });
+                            }
+                          }));
                     });
                 });
             });
@@ -117,6 +134,8 @@ const loginUsuario = (req, res) => {
       return res.status(200).json(errorResponse("Error al iniciar sesión", error.message, 3));
     });
 };
+
+
 
 
 const verificarCodigo = (req, res) => {

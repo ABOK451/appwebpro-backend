@@ -85,13 +85,11 @@ const verificarSesionActiva = async (req, res, next) => {
     const ahora = new Date();
 
     if (usuario.fin_sesion && usuario.fin_sesion > ahora) {
-      // ✅ Sumamos 3 minutos al fin_sesion existente
       const nuevaFin = new Date(usuario.fin_sesion.getTime() + 3 * 60000);
       await UsuarioService.actualizarLogin(usuario.id, { fin_sesion: nuevaFin });
 
       const tiempoRestanteMin = Math.ceil((nuevaFin.getTime() - ahora.getTime()) / 60000);
 
-      // Sobrescribimos res.json para inyectar tiempo_restante_min
       const originalJson = res.json.bind(res);
       res.json = (body) => {
         if (body && typeof body === 'object') {
