@@ -73,9 +73,6 @@ const listarProductos = (req, res) => {
     });
 };
 
-// ---------------------------------------------------------------------
-// LISTAR POR CAMPO
-// ---------------------------------------------------------------------
 const listarPorCampo = (req, res) => {
   const { nombre, categoria, proveedor } = req.body;
 
