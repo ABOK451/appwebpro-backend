@@ -1,15 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const { listarUsuarios, mostrarFormulario, crearUsuario, eliminarUsuario, actualizarUsuario, loginUsuario, solicitarReset, resetConCodigo } = require('../controllers/usuarioController');
+const { extenderSesion } = require('../middlewares/sesionActiva');
 
-router.get('/usuarios', listarUsuarios);
-router.get('/usuarios/nuevo', mostrarFormulario);
-router.post('/usuarios/nuevo', crearUsuario);
-router.delete('/usuarios/eliminar', eliminarUsuario); 
-router.put('/usuarios/actualizar', actualizarUsuario);
-router.post('/usuarios/login', loginUsuario);
-router.post('/usuarios/solicitar-reset', solicitarReset);
-router.post('/usuarios/reset-con-codigo', resetConCodigo); 
+const { listarUsuarios,  crearUsuario, eliminarUsuario, actualizarUsuario } = require('../controllers/usuarioController');
+
+
+router.get('/usuarios', extenderSesion, listarUsuarios);
+router.post('/usuarios/nuevo', extenderSesion, crearUsuario);
+router.delete('/usuarios/eliminar', extenderSesion, eliminarUsuario); 
+router.put('/usuarios/actualizar',  extenderSesion,actualizarUsuario);
+
+
 
 
 module.exports = router;

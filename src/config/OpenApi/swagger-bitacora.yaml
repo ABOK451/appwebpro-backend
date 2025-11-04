@@ -1,0 +1,201 @@
+openapi: "3.0.3"
+info:
+  title: API de Bitácora de Inventario
+  version: 1.0.0
+  description: >
+    API para registrar y consultar los movimientos de entrada, salida y registro inicial
+    de productos en el inventario.
+
+servers:
+  - url: http://localhost:3000
+
+tags:
+  - name: Bitácora
+    description: Operaciones relacionadas con la bitácora de inventario
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Bitacora:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        id_producto:
+          type: string
+          example: "CAM123"
+        tipo_movimiento:
+          type: string
+          example: entrada
+        cantidad:
+          type: integer
+          example: 50
+        descripcion:
+          type: string
+          example: "Ingreso de nuevo lote de productos"
+        fecha:
+          type: string
+          format: date-time
+          example: "2025-10-09T15:30:00Z"
+
+paths:
+  /bitacora/crear:
+    post:
+      tags:
+        - Bitácora
+      summary: Registrar un nuevo movimiento en bitácora
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id_producto
+                - tipo_movimiento
+                - cantidad
+              properties:
+                id_producto:
+                  type: string
+                  example: "CAM123"
+                tipo_movimiento:
+                  type: string
+                  enum: [entrada, salida, registro_inicial]
+                  example: entrada
+                cantidad:
+                  type: integer
+                  example: 25
+                descripcion:
+                  type: string
+                  example: "Ingreso de nuevo lote de productos"
+      responses:
+        "201":
+          description: Movimiento registrado exitosamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Registro agregado a bitácora"
+                  data:
+                    $ref: "#/components/schemas/Bitacora"
+        "400":
+          description: Faltan datos obligatorios
+        "500":
+          description: Error en el servidor
+
+  /bitacora/listar:
+    get:
+      tags:
+        - Bitácora
+      summary: Listar todos los registros de bitácora
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Lista de registros de bitácora
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bitacora"
+        "500":
+          description: Error en el servidor
+
+  /bitacora/actualizar:
+    put:
+      tags:
+        - Bitácora
+      summary: Actualizar un registro de bitácora
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+              properties:
+                id:
+                  type: integer
+                  example: 5
+                tipo_movimiento:
+                  type: string
+                  example: salida
+                cantidad:
+                  type: integer
+                  example: 10
+                descripcion:
+                  type: string
+                  example: "Corrección de cantidad por devolución"
+      responses:
+        "200":
+          description: Registro actualizado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Registro actualizado"
+                  data:
+                    $ref: "#/components/schemas/Bitacora"
+        "400":
+          description: Faltan datos obligatorios
+        "404":
+          description: Registro no encontrado
+        "500":
+          description: Error en el servidor
+
+  /bitacora/eliminar:
+    delete:
+      tags:
+        - Bitácora
+      summary: Eliminar un registro de bitácora
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+              properties:
+                id:
+                  type: integer
+                  example: 8
+      responses:
+        "200":
+          description: Registro eliminado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Registro eliminado"
+                  data:
+                    $ref: "#/components/schemas/Bitacora"
+        "400":
+          description: Faltan datos obligatorios
+        "404":
+          description: Registro no encontrado
+        "500":
+          description: Error en el servidor

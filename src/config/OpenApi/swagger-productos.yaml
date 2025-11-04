@@ -1,0 +1,413 @@
+openapi: 3.0.0
+info:
+  title: API de Productos
+  version: 1.0.0
+servers:
+  - url: https://localhost:3000
+
+tags:
+  - name: Productos
+    description: Operaciones relacionadas con productos
+  - name: Categorías
+    description: Operaciones relacionadas con categorías
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Producto:
+      type: object
+      properties:
+        codigo:
+          type: string
+          example: "PIZ123"
+        nombre:
+          type: string
+          example: "Pizza Pepperoni"
+        descripcion:
+          type: string
+          example: "Pizza grande con pepperoni y queso extra"
+        cantidad:
+          type: integer
+          example: 12
+        stock:
+          type: integer
+          example: 5
+        precio:
+          type: number
+          format: float
+          example: 199.99
+        proveedor:
+          type: string
+          example: "Pizzeria Italia"
+        id_categoria:
+          type: integer
+          example: 1
+        categoria_nombre:
+          type: string
+          example: "Pizzas"
+        imagen:
+          type: string
+          example: "https://imagenes.com/pizza-pepperoni.png"
+        fecha_ingreso:
+          type: string
+          format: date-time
+          example: "2025-10-06T18:00:00Z"
+
+    Categoria:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        nombre:
+          type: string
+          example: "Pizzas"
+      required:
+        - id
+        - nombre
+
+    FiltrosProductos:
+      type: object
+      properties:
+        categorias:
+          type: array
+          items:
+            type: string
+          example: ["Pizzas", "Bebidas"]
+        proveedores:
+          type: array
+          items:
+            type: string
+          example: ["Pizzeria Italia", "Bebidas Coca-Cola"]
+        nombres:
+          type: array
+          items:
+            type: string
+          example: ["Pizza Pepperoni", "Pizza Margarita"]
+
+paths:
+  /productos/crear:
+    post:
+      tags:
+        - Productos
+      summary: Crear un nuevo producto
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Producto'
+      responses:
+        '200':
+          description: Producto creado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: integer
+                    example: 0
+                  mensaje:
+                    type: string
+                    example: "Producto registrado correctamente"
+                  producto:
+                    $ref: '#/components/schemas/Producto'
+
+  /productos/listar:
+    get:
+      tags:
+        - Productos
+      summary: Listar todos los productos
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de productos obtenida correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: integer
+                    example: 0
+                  mensaje:
+                    type: string
+                    example: "Listado de productos"
+                  productos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Producto'
+
+  /productos/filtrar:
+    post:
+      tags:
+        - Productos
+      summary: Filtrar productos por nombre, categoría o proveedor (flexible)
+      description: Permite filtrar por uno, dos o los tres campos. Los campos que no se envíen se ignoran.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                nombre:
+                  type: string
+                  example: "Pepperoni"
+                categoria:
+                  type: string
+                  example: "Pizzas"
+                proveedor:
+                  type: string
+                  example: "Pizzeria Italia"
+      responses:
+        '200':
+          description: Productos filtrados correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: integer
+                    example: 0
+                  mensaje:
+                    type: string
+                    example: "Productos filtrados correctamente"
+                  productos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Producto'
+        '400':
+          description: Error de filtrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: integer
+                    example: 2
+                  error:
+                    type: object
+                    properties:
+                      mensaje:
+                        type: string
+                        example: "Campo de filtrado no válido"
+                      detalle:
+                        type: string
+                        nullable: true
+
+  /productos/actualizar:
+    put:
+      tags:
+        - Productos
+      summary: Actualizar un producto 
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - codigo
+              properties:
+                codigo:
+                  type: string
+                  example: "PIZ123"
+                nombre:
+                  type: string
+                  example: "Pizza Pepperoni Grande"
+                descripcion:
+                  type: string
+                  example: "Pizza grande con extra queso y pepperoni"
+                cantidad:
+                  type: integer
+                  example: 20
+                stock:
+                  type: integer
+                  example: 10
+                precio:
+                  type: number
+                  format: float
+                  example: 249.99
+                proveedor:
+                  type: string
+                  example: "Pizzeria Italia"
+                id_categoria:
+                  type: integer
+                  example: 1
+                imagen:
+                  type: string
+                  example: "https://imagenes.com/pizza-pepperoni-grande.png"
+      responses:
+        '200':
+          description: Producto actualizado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: integer
+                    example: 0
+                  mensaje:
+                    type: string
+                    example: "Producto actualizado correctamente"
+                  producto:
+                    $ref: '#/components/schemas/Producto'
+                  alertaBajoStock:
+                    type: boolean
+                    example: false
+        '404':
+          description: Producto no encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: string
+                    example: "PRODUCTO_NO_EXISTE"
+                  mensaje:
+                    type: string
+                    example: "Producto no encontrado"
+
+  /productos/eliminar:
+    delete:
+      tags:
+        - Productos
+      summary: Eliminar un producto 
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - codigo
+              properties:
+                codigo:
+                  type: string
+                  example: "PIZ123"
+      responses:
+        '200':
+          description: Producto eliminado correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: integer
+                    example: 0
+                  mensaje:
+                    type: string
+                    example: "Producto eliminado correctamente"
+                  producto:
+                    $ref: '#/components/schemas/Producto'
+        '404':
+          description: Producto no encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: string
+                    example: "PRODUCTO_NO_EXISTE"
+                  mensaje:
+                    type: string
+                    example: "Producto no encontrado"
+
+  /categorias/listar:
+    get:
+      tags:
+        - Categorías
+      summary: Listar todas las categorías disponibles
+      responses:
+        '200':
+          description: Lista de categorías
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: integer
+                    example: 0
+                  mensaje:
+                    type: string
+                    example: "Listado de categorías obtenido correctamente"
+                  categorias:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Categoria'
+        '500':
+          description: Error interno del servidor
+
+  /categorias/buscar:
+    post:
+      tags:
+        - Categorías
+      summary: Buscar categoría por nombre
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - nombre
+              properties:
+                nombre:
+                  type: string
+                  example: "Pizzas"
+      responses:
+        '200':
+          description: Categoría encontrada correctamente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: integer
+                    example: 0
+                  mensaje:
+                    type: string
+                    example: "Categoría encontrada correctamente"
+                  categoria:
+                    $ref: '#/components/schemas/Categoria'
+        '400':
+          description: Error de validación o categoría no encontrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  codigo:
+                    type: integer
+                    example: 2
+                  error:
+                    type: object
+                    properties:
+                      codigo:
+                        type: string
+                        example: "CATEGORIA_NO_EXISTE"
+                      mensaje:
+                        type: string
+                        example: "No existe la categoría con nombre 'X'"

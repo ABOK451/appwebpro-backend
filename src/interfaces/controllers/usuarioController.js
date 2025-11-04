@@ -1,226 +1,143 @@
 const UsuarioService = require('../../application/usuarioService');
-const bcrypt = require('bcrypt'); 
-const jwt = require('jsonwebtoken');
-const transporter = require('../../config/email'); 
-require('dotenv').config();
+const bcrypt = require('bcrypt');
+const errorResponse = require('../../helpers/errorResponse');
 
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
-const nombreRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]+$/;
+const nombreRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ]+(?:\s[A-Za-zÁÉÍÓÚáéíóúÑñ]+)*$/;
+const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const listarUsuarios = async (req, res) => {
-  try {
-    const usuarios = await UsuarioService.listar();
-    res.json({ mensaje: "Usuarios listados con éxito", usuarios });
-  } catch (error) {
-    res.status(500).json({ error: `Error al listar usuarios: ${error.message}` });
+const validarTelefono = (telefono) => {
+  if (!telefono) return false;
+  telefono = telefono.trim().replace(/\s+/g, '');
+  return /^\+52\d{10}$/.test(telefono);
+};
+
+const listarUsuarios = (req, res) => {
+  UsuarioService.listar()
+    .then(usuarios => {
+      res.json({
+        mensaje: "Usuarios listados con éxito",
+        codigo: 0,
+        token: req.tokenExtendido || null,
+        tiempo_restante_min: req.tiempoRestanteMin || null,
+        usuarios
+      });
+    })
+    .catch(error => res.status(200).json(
+      errorResponse("Error al listar usuarios", error.message, 5) // 5 = error servidor
+    ));
+};
+
+const crearUsuario = (req, res) => {
+  let { correo, password, rol, estado, nombre, app, apm, telefono } = req.body;
+
+  correo = correo?.trim();
+  nombre = nombre?.trim();
+  app = app?.trim();
+  apm = apm?.trim();
+  telefono = telefono?.trim();
+
+  const errores = [];
+
+  if (!correo) errores.push("Correo es obligatorio");
+  if (!password) errores.push("Contraseña es obligatoria");
+  if (!rol) errores.push("Rol es obligatorio");
+  if (!estado) errores.push("Estado es obligatorio");
+  if (!nombre) errores.push("Nombre es obligatorio");
+  if (!telefono) errores.push("Teléfono es obligatorio");
+
+  if (correo && !correoRegex.test(correo)) errores.push("El correo no es válido");
+  if (telefono && !validarTelefono(telefono)) errores.push("El teléfono debe incluir código de país y exactamente 10 dígitos, ej: +521234567890");
+  if (password && !passwordRegex.test(password)) errores.push("La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial");
+  if (nombre && !nombreRegex.test(nombre)) errores.push("El nombre solo puede contener letras y espacios");
+  if (app && !nombreRegex.test(app)) errores.push("El apellido paterno solo puede contener letras y espacios");
+  if (apm && !nombreRegex.test(apm)) errores.push("El apellido materno solo puede contener letras y espacios");
+
+  if (rol && typeof rol !== 'string') errores.push("El rol solo puede contener texto");
+  if (estado && typeof estado !== 'string') errores.push("El estado solo puede contener texto");
+
+  if (errores.length > 0) {
+    return res.status(200).json(errorResponse("Errores de validación", errores, 2)); // 2 = validación
   }
-};
 
-const mostrarFormulario = (req, res) => {
-  res.json({
-    mensaje: "Para crear un usuario, envía un POST a /usuarios/nuevo con nombre, correo, password, rol, estado, teléfono"
-  });
-};
-
-const crearUsuario = async (req, res) => {
-  try {
-    const { correo, password, rol, estado, nombre, app, apm, telefono } = req.body;
-
-    if (!correo || !password || !rol || !estado || !nombre || !telefono) {
-      return res.status(400).json({ error: "Todos los campos son obligatorios" });
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
-      return res.status(400).json({ error: "El correo no es válido" });
-    }
-    if (!/^\+\d{1,3}\d{10}$/.test(telefono)) {
-      return res.status(400).json({ error: "El teléfono debe incluir código de país y 10 dígitos, ejemplo +521234567890" });
-    }
-    if (!passwordRegex.test(password)) {
-      return res.status(400).json({ error: "La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" });
-    }
-    if (!nombreRegex.test(nombre)) {
-      return res.status(400).json({ error: "El nombre solo puede contener letras (con acentos permitidos) y espacios, sin números ni caracteres especiales" });
-    }
-    if (app && !nombreRegex.test(app)) {
-      return res.status(400).json({ error: "El apellido paterno solo puede contener letras (con acentos permitidos), sin números ni caracteres especiales" });
-    }
-    if (apm && !nombreRegex.test(apm)) {
-      return res.status(400).json({ error: "El apellido materno solo puede contener letras (con acentos permitidos), sin números ni caracteres especiales" });
-    }
-
-    const hash = await bcrypt.hash(password, 10);
-    const nuevoUsuario = await UsuarioService.crear({ correo, password: hash, rol, estado, nombre, app, apm, telefono });
-    res.status(201).json({ mensaje: "Usuario creado con éxito", usuario: nuevoUsuario });
-    
-  } catch (error) {
-    // Captura el error de clave duplicada de PostgreSQL
-    if (error.code === '23505' && error.detail && error.detail.includes('correo')) {
-      return res.status(400).json({ error: "El correo ya existe, no se puede repetir" });
-    }
-
-    res.status(400).json({ error: `Error al crear usuario: ${error.message}` });
-  }
-};
-
-
-const eliminarUsuario = async (req, res) => {
-  try {
-    const { correo } = req.body;
-    if (!correo) return res.status(400).json({ error: "El correo es requerido para eliminar un usuario" });
-
-    const usuarioEliminado = await UsuarioService.eliminar({ correo });
-    if (!usuarioEliminado) return res.status(404).json({ error: `Usuario con correo ${correo} no encontrado` });
-
-    res.json({ mensaje: `Usuario ${usuarioEliminado.nombre} eliminado con éxito` });
-  } catch (error) {
-    res.status(500).json({ error: `Error al eliminar usuario: ${error.message}` });
-  }
-};
-
-const actualizarUsuario = async (req, res) => {
-  try {
-    const { correo, password, telefono, nombre, app, apm } = req.body;
-    if (!correo) return res.status(400).json({ error: "El correo del usuario a actualizar es requerido" });
-
-    if (telefono && !/^\+\d{1,3}\d{10}$/.test(telefono)) {
-      return res.status(400).json({ error: "El teléfono debe incluir código de país y 10 dígitos" });
-    }
-    if (password && !passwordRegex.test(password)) {
-      return res.status(400).json({ error: "La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" });
-    }
-    if (nombre && !nombreRegex.test(nombre)) {
-      return res.status(400).json({ error: "El nombre no debe contener números ni caracteres especiales" });
-    }
-    if (app && !nombreRegex.test(app)) {
-      return res.status(400).json({ error: "El apellido paterno no debe contener números ni caracteres especiales" });
-    }
-    if (apm && !nombreRegex.test(apm)) {
-      return res.status(400).json({ error: "El apellido materno no debe contener números ni caracteres especiales" });
-    }
-
-    const datosActualizar = { ...req.body };
-    if (password) datosActualizar.password = await bcrypt.hash(password, 10);
-
-    const usuarioActualizado = await UsuarioService.actualizar(correo, datosActualizar);
-    if (!usuarioActualizado) return res.status(404).json({ error: `Usuario con correo ${correo} no encontrado` });
-
-    res.json({ mensaje: "Usuario actualizado con éxito", usuario: usuarioActualizado });
-  } catch (error) {
-    res.status(500).json({ error: `Error al actualizar usuario: ${error.message}` });
-  }
-};
-
-const loginUsuario = async (req, res) => {
-  try {
-    const { correo, password } = req.body;
-    if (!correo || !password) return res.status(400).json({ error: "Correo y contraseña son requeridos" });
-
-    const usuario = await UsuarioService.buscarPorCorreo(correo);
-    if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
-
-    const passwordCorrecto = await bcrypt.compare(password, usuario.password);
-    if (!passwordCorrecto) return res.status(401).json({ error: "Contraseña incorrecta" });
-
-    const token = jwt.sign(
-      { id: usuario.id, correo: usuario.correo, rol: usuario.rol },
-      process.env.JWT_SECRET || 'mi_secreto_jwt',
-      { expiresIn: '1h' }
-    );
-
-    res.json({
-      mensaje: "Login exitoso",
-      usuario: {
-        id: usuario.id,
-        nombre: usuario.nombre,
-        correo: usuario.correo,
-        rol: usuario.rol
-      },
-      token
+  bcrypt.hash(password, 10)
+    .then(hash => UsuarioService.crear({ correo, password: hash, rol, estado, nombre, app, apm, telefono }))
+    .then(nuevoUsuario => res.status(200).json({ mensaje: "Usuario creado con éxito", usuario: nuevoUsuario, codigo: 0 }))
+    .catch(error => {
+      if (error.code === '23505' && error.detail?.includes('correo')) {
+        return res.status(200).json(errorResponse("El correo ya existe, no se puede repetir", null, 2));
+      }
+      res.status(200).json(errorResponse("Error al crear usuario", error.message, 5));
     });
-  } catch (error) {
-    res.status(500).json({ error: `Error al iniciar sesión: ${error.message}` });
-  }
 };
 
-const solicitarReset = async (req, res) => {
-  try {
-    const { correo } = req.body;
-    if (!correo) return res.status(400).json({ error: "El correo es requerido" });
+const eliminarUsuario = (req, res) => {
+  const { correo } = req.body;
+  const errores = [];
 
-    const usuario = await UsuarioService.buscarPorCorreo(correo);
-    if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
+  if (!correo) errores.push("El correo es requerido para eliminar un usuario");
+  else if (!correoRegex.test(correo)) errores.push("El correo no tiene un formato válido");
 
-    const codigo = Math.floor(100000 + Math.random() * 900000).toString();
-    const expira = new Date(Date.now() + 15 * 60000); // 15 minutos
+  if (errores.length > 0) return res.status(200).json(errorResponse("Errores de validación", errores, 2));
 
-    const usuarioActualizado = await UsuarioService.actualizar(correo, { reset_code: codigo, reset_expires: expira });
-    if (!usuarioActualizado) return res.status(500).json({ error: "No se pudo actualizar el código de recuperación" });
-
-    await transporter.sendMail({
-      from: `"Soporte App" <${process.env.EMAIL_USER}>`,
-      to: correo,
-      subject: "Recuperación de contraseña",
-      text: `Tu código de recuperación es: ${codigo}. Válido por 15 minutos.`,
-      html: `<p>Hola ${usuario.nombre},</p>
-            <p>Tu código de recuperación es: <b>${codigo}</b></p>
-            <p>Válido por 15 minutos.</p>`
-    });
-
-    res.json({ mensaje: "Código de verificación enviado al correo" });
-  } catch (error) {
-    console.error("Error solicitarReset:", error);
-    res.status(500).json({ error: `Error al generar código: ${error.message}` });
-  }
+  UsuarioService.eliminar({ correo })
+    .then(usuarioEliminado => {
+      if (!usuarioEliminado) return res.status(200).json(errorResponse(`Usuario con correo ${correo} no encontrado`, null, 3));
+      res.json({ mensaje: `Usuario ${usuarioEliminado.nombre} eliminado con éxito`, codigo: 0 });
+    })
+    .catch(error => res.status(200).json(errorResponse("Error al eliminar usuario", error.message, 5)));
 };
 
-const resetConCodigo = async (req, res) => {
-  try {
-    const { correo, codigo, nuevaPassword } = req.body;
-    if (!correo || !codigo || !nuevaPassword) {
-      return res.status(400).json({ error: "Correo, código y nueva contraseña son requeridos" });
-    }
+const actualizarUsuario = (req, res) => {
+  let { correo, password, telefono, nombre, app, apm, rol, estado } = req.body;
 
-    const usuario = await UsuarioService.buscarPorCorreo(correo);
-    if (!usuario) return res.status(404).json({ error: "Usuario no encontrado" });
+  correo = correo?.trim();
+  nombre = nombre?.trim();
+  app = app?.trim();
+  apm = apm?.trim();
+  telefono = telefono?.trim();
+  rol = rol?.trim();
+  estado = estado?.trim();
 
-    if (
-      !usuario.reset_code ||
-      usuario.reset_code.toString().trim() !== codigo.toString().trim() ||
-      new Date() > new Date(usuario.reset_expires)
-    ) {
-      return res.status(400).json({ error: "Código inválido o expirado" });
-    }
+  if (!correo) return res.status(200).json(errorResponse("El correo del usuario a actualizar es requerido", null, 2));
 
-    if (!passwordRegex.test(nuevaPassword)) {
-      return res.status(400).json({ error: "La contraseña no cumple los requisitos de seguridad: La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial" });
-    }
+  const errores = [];
 
-    const hash = await bcrypt.hash(nuevaPassword, 10);
+  if (correo && !correoRegex.test(correo)) errores.push("El correo no es válido");
+  if (password && !passwordRegex.test(password)) errores.push("La contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial");
+  if (nombre && !nombreRegex.test(nombre)) errores.push("El nombre solo puede contener letras y espacios");
+  if (app && !nombreRegex.test(app)) errores.push("El apellido paterno solo puede contener letras y espacios");
+  if (apm && !nombreRegex.test(apm)) errores.push("El apellido materno solo puede contener letras y espacios");
+  if (telefono && !validarTelefono(telefono)) errores.push("El teléfono debe incluir código de país y exactamente 10 dígitos, ej: +521234567890");
+  if (rol && typeof rol !== 'string') errores.push("El rol solo puede contener texto");
+  if (estado && typeof estado !== 'string') errores.push("El estado solo puede contener texto");
 
-    const usuarioActualizado = await UsuarioService.actualizar(correo, {
-      passwordHash: hash,    
-      reset_code: null,
-      reset_expires: null
-    });
+  if (errores.length > 0) return res.status(200).json(errorResponse("Errores de validación", errores, 2));
 
-    if (!usuarioActualizado) {
-      return res.status(500).json({ error: "No se pudo actualizar la contraseña" });
-    }
+  const datosActualizar = {};
+  const hashPromise = password ? bcrypt.hash(password, 10).then(hash => { datosActualizar.password = hash; }) : Promise.resolve();
 
-    res.json({ mensaje: "Contraseña restablecida con éxito" });
-  } catch (error) {
-    console.error("Error resetConCodigo:", error);
-    res.status(500).json({ error: `Error al restablecer contraseña: ${error.message}` });
-  }
+  hashPromise
+    .then(() => {
+      if (nombre) datosActualizar.nombre = nombre;
+      if (app) datosActualizar.app = app;
+      if (apm) datosActualizar.apm = apm;
+      if (telefono) datosActualizar.telefono = telefono;
+      if (rol) datosActualizar.rol = rol;
+      if (estado) datosActualizar.estado = estado;
+
+      return UsuarioService.actualizar(correo, datosActualizar);
+    })
+    .then(usuarioActualizado => {
+      if (!usuarioActualizado) return res.status(200).json(errorResponse(`Usuario con correo ${correo} no encontrado`, null, 3));
+      res.json({ mensaje: "Usuario actualizado con éxito", usuario: usuarioActualizado, codigo: 0 });
+    })
+    .catch(error => res.status(200).json(errorResponse("Error al actualizar usuario", error.message, 5)));
 };
 
 module.exports = {
   listarUsuarios,
-  mostrarFormulario,
   crearUsuario,
   eliminarUsuario,
-  actualizarUsuario,
-  loginUsuario,
-  solicitarReset,
-  resetConCodigo
+  actualizarUsuario
 };

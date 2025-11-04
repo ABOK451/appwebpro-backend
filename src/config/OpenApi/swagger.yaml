@@ -1,11 +1,23 @@
 openapi: 3.0.0
 info:
   title: API de Usuarios
-  description: Documentación funcional con Swagger UI
   version: 1.0.0
-
 servers:
-  - url: http://localhost:3000
+  - url: https://localhost:3000
+
+tags:
+  - name: Usuarios
+    description: Operaciones relacionadas con usuarios
+  - name: Auth
+    description: Operaciones de autenticación y login
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
 
 paths:
   /ping:
@@ -25,7 +37,11 @@ paths:
 
   /usuarios:
     get:
+      tags:
+        - Usuarios
       summary: Lista todos los usuarios
+      security:
+       - bearerAuth: []
       responses:
         '200':
           description: Lista de usuarios
@@ -63,7 +79,11 @@ paths:
 
   /usuarios/nuevo:
     post:
+      tags:
+        - Usuarios
       summary: Crear un nuevo usuario
+      security:
+       - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -132,7 +152,11 @@ paths:
 
   /usuarios/actualizar:
     put:
+      tags:
+        - Usuarios
       summary: Actualizar un usuario por correo
+      security:
+       - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -214,7 +238,11 @@ paths:
 
   /usuarios/eliminar:
     delete:
+      tags:
+        - Usuarios
       summary: Eliminar un usuario
+      security:
+       - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -258,8 +286,10 @@ paths:
                     type: string
                     example: "+521111122233"
 
-  /usuarios/login:
+  /auth/login:
     post:
+      tags:
+        - Auth
       summary: Login de usuario
       requestBody:
         required: true
@@ -325,6 +355,18 @@ paths:
                     type: string
               example:
                 error: "Contraseña incorrecta"
+        '403':
+          description: Cuenta bloqueada temporalmente
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    description: "Mensaje indicando hasta cuándo la cuenta está bloqueada"
+              example:
+                error: "Cuenta bloqueada hasta {fecha_hora_dinamica}"
         '404':
           description: Usuario no encontrado
           content:
@@ -336,9 +378,101 @@ paths:
                     type: string
               example:
                 error: "Usuario no encontrado"
-
-  /usuarios/solicitar-reset:
+  
+  /auth/verificar-codigo:
     post:
+      tags:
+        - Auth
+      summary: Verificación de código 2FA
+      description: Verifica el código enviado al usuario tras el login (correo/SMS/app). Si es válido, devuelve el token JWT de acceso.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - correo
+                - codigo
+              properties:
+                correo:
+                  type: string
+                  example: "usuario@gmail.com"
+                codigo:
+                  type: string
+                  example: "123456"
+      responses:
+        '200':
+          description: Verificación exitosa
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Autenticación exitosa"
+                  token:
+                    type: string
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  usuario:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 3
+                      nombre:
+                        type: string
+                        example: "Usuario"
+                      correo:
+                        type: string
+                        example: "usuario@mail.com"
+                      rol:
+                        type: string
+                        example: "admin"
+        '400':
+          description: Datos incompletos o código inválido/expirado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+              examples:
+                faltan_datos:
+                  value:
+                    error: "Correo y código son requeridos"
+                codigo_invalido:
+                  value:
+                    error: "Código inválido o expirado"
+        '404':
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+              example:
+                error: "Usuario no encontrado"
+        '500':
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+              example:
+                error: "Error al verificar código: error inesperado"
+
+  /recuperar/solicitar-reset:
+    post:
+      tags:
+        - Auth
       summary: Solicitar código para restablecer contraseña
       description: Genera un código de verificación temporal que será enviado al correo del usuario.
       requestBody:
@@ -392,8 +526,10 @@ paths:
                     type: string
                     example: "Usuario no encontrado"
 
-  /usuarios/reset-con-codigo:
+  /recuperar/reset-con-codigo:
     post:
+      tags:
+        - Auth
       summary: Restablecer contraseña con código
       description: Valida el código y actualiza la contraseña del usuario.
       requestBody:
@@ -453,3 +589,72 @@ paths:
                   error:
                     type: string
                     example: "Usuario no encontrado"
+  /admin:
+    get:
+      tags:
+        - Auth
+      summary: Acceso solo para administradores
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Acceso concedido al admin
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Hola Admin"
+                  usuario:
+                    type: object
+                    example:
+                      id: 1
+                      correo: "admin@mail.com"
+                      rol: "admin"
+        '403':
+          description: Acceso denegado (no es admin)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Acceso denegado"
+
+  /user:
+    get:
+      tags:
+        - Auth
+      summary: Acceso para usuarios y administradores
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Acceso concedido
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje:
+                    type: string
+                    example: "Hola Usuario"
+                  usuario:
+                    type: object
+                    example:
+                      id: 2
+                      correo: "user@mail.com"
+                      rol: "user"
+        '403':
+          description: Acceso denegado (sin rol válido)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Acceso denegado"
