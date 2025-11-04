@@ -76,8 +76,8 @@ class InventarioReportService {
       SELECT p.codigo, p.nombre, p.cantidad AS stock_actual, p.precio, c.nombre as categoria_nombre
       FROM productos p
       LEFT JOIN categorias c ON p.id_categoria = c.id
-      WHERE p.cantidad <= $1
-      ORDER BY p.cantidad ASC
+      WHERE p.stock <= $1
+      ORDER BY p.stock ASC
     `, [threshold]).then(r => r.rows);
   }
 
