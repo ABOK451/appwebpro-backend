@@ -22,37 +22,41 @@ const loginUsuario = (req, res) => {
 
   console.log(`[LOGIN] Intento de login recibido para correo: ${correo}`);
 
-  // ---------- VALIDACIONES ----------
-  if (!correo || typeof correo !== 'string' || correo.trim() === "" || !correoRegex.test(correo)) {
-    errores.push({
-      campo: "correo",
-      mensaje: !correo
-        ? "Correo es requerido"
-        : typeof correo !== 'string'
-        ? "Correo debe ser texto"
-        : correo.trim() === ""
-        ? "Correo no puede estar vacío"
-        : "El correo debe tener un formato válido"
-    });
+  // Expresiones regulares (asegúrate de definirlas)
+  const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+
+  // ---------- VALIDACIÓN DE CORREO ----------
+  if (correo === null || correo === undefined) {
+    errores.push({ campo: "correo", mensaje: "Correo es requerido" });
+  } else if (typeof correo !== 'string') {
+    errores.push({ campo: "correo", mensaje: "Correo debe ser texto" });
+  } else if (correo.trim() === "") {
+    errores.push({ campo: "correo", mensaje: "Correo no puede estar vacío" });
+  } else if (!correoRegex.test(correo)) {
+    errores.push({ campo: "correo", mensaje: "Correo con formato inválido" });
   }
 
-  if (!password || typeof password !== 'string' || password.trim() === "" || !passwordRegex.test(password)) {
+  // ---------- VALIDACIÓN DE CONTRASEÑA ----------
+  if (password === null || password === undefined) {
+    errores.push({ campo: "password", mensaje: "Contraseña es requerida" });
+  } else if (typeof password !== 'string') {
+    errores.push({ campo: "password", mensaje: "Contraseña debe ser texto" });
+  } else if (password.trim() === "") {
+    errores.push({ campo: "password", mensaje: "Contraseña no puede estar vacía" });
+  } else if (!passwordRegex.test(password)) {
     errores.push({
       campo: "password",
-      mensaje: !password
-        ? "Contraseña es requerida"
-        : typeof password !== 'string'
-        ? "Contraseña debe ser texto"
-        : password.trim() === ""
-        ? "Contraseña no puede estar vacía"
-        : "Contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial"
+      mensaje: "Contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial"
     });
   }
 
+  // ---------- SI HAY ERRORES, DETENER FLUJO ----------
   if (errores.length > 0) {
-    console.log(`[LOGIN] Validación fallida para ${correo}:`, errores);
+    console.log(`[LOGIN] Validación fallida para ${correo || 'sin correo'}:`, errores);
     return res.status(200).json(errorResponse("Errores de validación", errores, 2));
   }
+  
 
   // ---------- BÚSQUEDA Y AUTENTICACIÓN ----------
   console.log(`[LOGIN] Validación exitosa para ${correo}. Buscando usuario en DB...`);
