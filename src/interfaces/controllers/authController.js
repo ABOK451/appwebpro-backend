@@ -16,7 +16,7 @@ const codigoRegex = /^\d+$/;
 
 const hayInternet = () => new Promise(resolve => dns.lookup('google.com', err => resolve(!err)));
 
-const loginUsuario = (req, res) => {
+const loginUsuario = async (req, res) => {
   const { correo, password } = req.body;
   const errores = [];
 
@@ -24,115 +24,88 @@ const loginUsuario = (req, res) => {
 
   // ---------- VALIDACIONES ----------
   if (!correo || typeof correo !== 'string' || correo.trim() === "" || !correoRegex.test(correo)) {
-    errores.push({
-      campo: "correo",
-      mensaje: !correo
-        ? "Correo es requerido"
-        : typeof correo !== 'string'
-        ? "Correo debe ser texto"
-        : correo.trim() === ""
-        ? "Correo no puede estar vacío"
-        : "El correo debe tener un formato válido"
-    });
+    errores.push({ campo: "correo", mensaje: "Correo inválido o vacío" });
   }
-
   if (!password || typeof password !== 'string' || password.trim() === "" || !passwordRegex.test(password)) {
-    errores.push({
-      campo: "password",
-      mensaje: !password
-        ? "Contraseña es requerida"
-        : typeof password !== 'string'
-        ? "Contraseña debe ser texto"
-        : password.trim() === ""
-        ? "Contraseña no puede estar vacía"
-        : "Contraseña debe tener mínimo 8 caracteres, incluir mayúscula, minúscula, número y carácter especial"
-    });
+    errores.push({ campo: "password", mensaje: "Contraseña inválida o no cumple requisitos" });
   }
-
   if (errores.length > 0) {
     console.log(`[LOGIN] Validación fallida para ${correo}:`, errores);
     return res.status(200).json(errorResponse("Errores de validación", errores, 2));
   }
 
-  // ---------- BÚSQUEDA Y AUTENTICACIÓN ----------
-  console.log(`[LOGIN] Validación exitosa para ${correo}. Buscando usuario en DB...`);
+  try {
+    const usuario = await UsuarioService.buscarPorCorreo(correo);
+    if (!usuario) {
+      console.log(`[LOGIN] Usuario no encontrado: ${correo}`);
+      return res.status(200).json(errorResponse("Usuario no encontrado", null, 3));
+    }
 
-  UsuarioService.buscarPorCorreo(correo)
-    .then(usuario => {
-      if (!usuario) {
-        console.log(`[LOGIN] Usuario no encontrado: ${correo}`);
-        return res.status(200).json(errorResponse("Usuario no encontrado", null, 3));
-      }
+    console.log(`[LOGIN] Usuario encontrado: ${usuario.id} - ${usuario.nombre}. Verificando bloqueo...`);
+    const bloqueado = await isBlocked(usuario.id);
+    if (bloqueado) {
+      console.log(`[LOGIN] Cuenta bloqueada para usuario ${usuario.id} hasta ${usuario.blocked_until}`);
+      return res.status(200).json(errorResponse(`Cuenta bloqueada hasta ${usuario.blocked_until}`, null, 3));
+    }
 
-      console.log(`[LOGIN] Usuario encontrado: ${usuario.id} - ${usuario.nombre}. Verificando bloqueo...`);
+    const passwordCorrecto = await bcrypt.compare(password, usuario.password);
+    if (!passwordCorrecto) {
+      console.log(`[LOGIN] Contraseña incorrecta para usuario ${usuario.id}`);
+      await loginAttempt(usuario);
+      return res.status(200).json(errorResponse("Contraseña incorrecta", null, 2));
+    }
 
-      return isBlocked(usuario.id)
-        .then(bloqueado => {
-          if (bloqueado) {
-            console.log(`[LOGIN] Cuenta bloqueada para usuario ${usuario.id} hasta ${usuario.blocked_until}`);
-            return res.status(200).json(errorResponse(`Cuenta bloqueada hasta ${usuario.blocked_until}`, null, 3));
-          }
+    console.log(`[LOGIN] Contraseña correcta. Reseteando intentos fallidos para usuario ${usuario.id}`);
+    await UsuarioService.actualizarLogin(usuario.id, { failed_attempts: 0, blocked_until: null });
 
-          console.log(`[LOGIN] Verificando contraseña para usuario ${usuario.id}...`);
-          return bcrypt.compare(password, usuario.password)
-            .then(passwordCorrecto => {
-              if (!passwordCorrecto) {
-                console.log(`[LOGIN] Contraseña incorrecta para usuario ${usuario.id}`);
-                return loginAttempt(usuario)
-                  .then(() => res.status(200).json(errorResponse("Contraseña incorrecta", null, 2)));
-              }
+    // Obtener ubicación
+    const ipParaPrueba = req.ip === "::1" ? "8.8.8.8" : req.ip;
+    console.log(`[LOGIN] Obteniendo ubicación por IP: ${ipParaPrueba}`);
+    const ubicacion = await obtenerUbicacionIP(ipParaPrueba);
+    if (ubicacion?.lat && ubicacion?.lng) {
+      console.log(`[LOGIN] Ubicación obtenida: lat=${ubicacion.lat}, lng=${ubicacion.lng}. Guardando...`);
+      await AuthService.guardarUbicacion(usuario.id, ubicacion.lat, ubicacion.lng);
+    }
 
-              console.log(`[LOGIN] Contraseña correcta. Reseteando intentos fallidos para usuario ${usuario.id}`);
-              return UsuarioService.actualizarLogin(usuario.id, { failed_attempts: 0, blocked_until: null })
-                .then(() => {
-                  const ipParaPrueba = req.ip === "::1" ? "8.8.8.8" : req.ip;
-                  console.log(`[LOGIN] Obteniendo ubicación por IP: ${ipParaPrueba}`);
+    // Generar código 2FA
+    const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+    const expira = new Date(Date.now() + 5 * 60000);
+    console.log(`[LOGIN] Generando código 2FA para usuario ${usuario.id}: ${codigo} (expira: ${expira})`);
 
-                  return obtenerUbicacionIP(ipParaPrueba)
-                    .then(ubicacion => {
-                      if (ubicacion?.lat && ubicacion?.lng) {
-                        console.log(`[LOGIN] Ubicación obtenida: lat=${ubicacion.lat}, lng=${ubicacion.lng}. Guardando...`);
-                        return AuthService.guardarUbicacion(usuario.id, ubicacion.lat, ubicacion.lng);
-                      } else {
-                        console.log(`[LOGIN] No se obtuvo ubicación para ${usuario.id}`);
-                      }
-                    })
-                    .then(() => {
-                      const codigo = Math.floor(100000 + Math.random() * 900000).toString();
-                      const expira = new Date(Date.now() + 5 * 60000);
-                      console.log(`[LOGIN] Generando código 2FA para usuario ${usuario.id}: ${codigo} (expira: ${expira})`);
+    await RecuperarService.guardarCodigoReset(usuario.id, codigo, expira);
 
-                      return RecuperarService.guardarCodigoReset(usuario.id, codigo, expira)
-                        .then(() => hayInternet()
-                          .then(internet => {
-                            if (internet) {
-                              console.log(`[LOGIN] Enviando correo 2FA a ${correo}`);
-                              return transporter.sendMail({
-                                from: `"Soporte App" <${process.env.EMAIL_USER}>`,
-                                to: correo,
-                                subject: "Código de verificación 2FA",
-                                text: `Tu código de autenticación es: ${codigo}. Válido por 5 minutos.`,
-                                html: `<p>Hola ${usuario.nombre},</p>
-                                       <p>Tu código de autenticación es: <b>${codigo}</b></p>
-                                       <p>Válido por 5 minutos.</p>`
-                              }).then(() => {
-                                console.log(`[LOGIN] Correo 2FA enviado a ${correo}`);
-                                res.json({ mensaje: "Código de verificación enviado", codigo: 0 });
-                              });
-                            } else {
-                              console.log(`[OFFLINE MODE] Código OTP para ${correo}: ${codigo}`);
-                              return res.json({ mensaje: "Código de verificación generado en modo offline", otp: codigo, codigo: 0 });
-                            }
-                          }));
-                    });
-                });
-            });
+    // Intentar enviar correo
+    let correoEnviado = false;
+    if (await hayInternet()) {
+      try {
+        await transporter.sendMail({
+          from: `"Soporte App" <${process.env.EMAIL_USER}>`,
+          to: correo,
+          subject: "Código de verificación 2FA",
+          text: `Tu código de autenticación es: ${codigo}. Válido por 5 minutos.`,
+          html: `<p>Hola ${usuario.nombre},</p>
+                 <p>Tu código de autenticación es: <b>${codigo}</b></p>
+                 <p>Válido por 5 minutos.</p>`
         });
-    })
-    .catch(error => {
-      console.error(`[LOGIN] Error loginUsuario para ${correo}:`, error);
-      return res.status(200).json(errorResponse("Error al iniciar sesión", error.message, 3));
-    });
+        correoEnviado = true;
+        console.log(`[LOGIN] Correo 2FA enviado a ${correo}`);
+      } catch (mailErr) {
+        console.error(`[LOGIN] Error enviando correo 2FA:`, mailErr);
+      }
+    }
+
+    // Responder al cliente
+    if (correoEnviado) {
+      res.json({ mensaje: "Código de verificación enviado por correo", codigo: 0 });
+    } else {
+      console.log(`[OFFLINE MODE] Código OTP para ${correo}: ${codigo}`);
+      res.json({ mensaje: "No se pudo enviar correo, código generado en modo offline", otp: codigo, codigo: 0 });
+    }
+
+  } catch (error) {
+    console.error(`[LOGIN] Error loginUsuario para ${correo}:`, error);
+    return res.status(200).json(errorResponse("Error al iniciar sesión", error.message, 3));
+  }
 };
 
 
