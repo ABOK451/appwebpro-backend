@@ -1,10 +1,6 @@
 const express = require("express");
 const swaggerUi = require("swagger-ui-express");
 const YAML = require("yamljs");
-const selfsigned = require("selfsigned");
-const fs = require("fs");
-const https = require("https");
-const http = require("http");
 const cors = require("cors");
 
 const pingRoutes = require("./interfaces/routes/pingRoutes");
@@ -21,22 +17,18 @@ require("dotenv").config();
 
 const app = express();
 
-// Middleware para JSON
-// Middleware para JSON
+// Middleware JSON seguro
 app.use(express.json({
   verify: (req, res, buf, encoding) => {
     try {
-      if (buf && buf.length) {
-        JSON.parse(buf.toString(encoding || 'utf8'));
-      }
+      if (buf && buf.length) JSON.parse(buf.toString(encoding || 'utf8'));
     } catch (e) {
-      // Marcamos el request con un flag para manejarlo después
       req.invalidJson = true;
     }
   }
 }));
 
-// Middleware para detectar JSON inválido
+// Manejo de JSON inválido
 app.use((req, res, next) => {
   if (req.invalidJson) {
     return res.status(400).json(errorResponse(
@@ -48,7 +40,6 @@ app.use((req, res, next) => {
   }
   next();
 });
-
 
 app.use(express.urlencoded({ extended: true }));
 
@@ -72,32 +63,32 @@ const swaggerBitacora = YAML.load("./src/config/OpenApi/swagger-bitacora.yaml");
 const swaggerReporte = YAML.load("./src/config/OpenApi/swagger-reporte.yaml");
 
 const swaggerDocument = {
-    openapi: "3.0.0",
-    info: {
-        title: "API Completa",
-        version: "1.0.0"
+  openapi: "3.0.0",
+  info: {
+    title: "API Completa",
+    version: "1.0.0"
+  },
+  servers: swaggerUsuarios.servers || [],
+  paths: {
+    ...swaggerUsuarios.paths,
+    ...swaggerProductos.paths,
+    ...swaggerBitacora.paths,
+    ...swaggerReporte.paths
+  },
+  components: {
+    securitySchemes: {
+      ...(swaggerUsuarios.components.securitySchemes || {}),
+      ...(swaggerProductos.components.securitySchemes || {}),
+      ...(swaggerBitacora.components.securitySchemes || {}),
+      ...(swaggerReporte.components.securitySchemes || {}),
     },
-    servers: swaggerUsuarios.servers || [],
-    paths: {
-        ...swaggerUsuarios.paths,
-        ...swaggerProductos.paths,
-        ...swaggerBitacora.paths,
-        ...swaggerReporte.paths
-    },
-    components: {
-        securitySchemes: {
-            ...(swaggerUsuarios.components.securitySchemes || {}),
-            ...(swaggerProductos.components.securitySchemes || {}),
-            ...(swaggerBitacora.components.securitySchemes || {}),
-            ...(swaggerReporte.components.securitySchemes || {}),
-        },
-        schemas: {
-            ...(swaggerUsuarios.components.schemas || {}),
-            ...(swaggerProductos.components.schemas || {}),
-            ...(swaggerBitacora.components.schemas || {}),
-            ...(swaggerReporte.components.schemas || {}),
-        }
+    schemas: {
+      ...(swaggerUsuarios.components.schemas || {}),
+      ...(swaggerProductos.components.schemas || {}),
+      ...(swaggerBitacora.components.schemas || {}),
+      ...(swaggerReporte.components.schemas || {}),
     }
+  }
 };
 
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
@@ -113,34 +104,9 @@ app.use("/", invetarioRoutes);
 app.use("/", reporteRoutes);
 app.use("/", categoriaRoutes);
 
-// Certificados
-const certDir = "src/certs";
-if (!fs.existsSync(certDir)) fs.mkdirSync(certDir);
-
-const keyPath = `${certDir}/server.key`;
-const certPath = `${certDir}/server.crt`;
-
-if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
-  const attrs = [{ name: 'commonName', value: 'localhost' }];
-  const options = { keySize: 2048, days: 365, algorithm: 'sha256' };
-  const pems = selfsigned.generate(attrs, options);
-  fs.writeFileSync(keyPath, pems.private);
-  fs.writeFileSync(certPath, pems.cert);
-}
-
-const sslOptions = {
-  key: fs.readFileSync(keyPath),
-  cert: fs.readFileSync(certPath)
-};
-
-// Puerto HTTPS
+// SOLO HTTP 🙌
 const PORT = process.env.PORT || 3000;
-https.createServer(sslOptions, app).listen(PORT, () => {
-  console.log(`Servidor HTTPS corriendo en https://localhost:${PORT}`);
-});
 
-// Puerto HTTP para pruebas locales
-const PORT_HTTP = 3001;
-http.createServer(app).listen(PORT_HTTP, () => {
-  console.log(`Servidor HTTP corriendo en http://localhost:${PORT_HTTP}`);
+app.listen(PORT, () => {
+  console.log(`✅ Servidor HTTP corriendo en http://localhost:${PORT}`);
 });
