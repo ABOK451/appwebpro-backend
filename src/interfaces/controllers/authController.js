@@ -130,9 +130,10 @@ const loginUsuario = (req, res) => {
                             console.log(`[LOGIN] Correo 2FA enviado a ${correo}`);
                             res.json({ mensaje: "Código de verificación enviado por correo", codigo: 0 });
                           } else {
-                            console.log(`[OFFLINE MODE] Código OTP para ${correo}: ${codigo}`);
-                            res.json({ mensaje: "No se pudo enviar correo, código generado en modo offline", otp: codigo, codigo: 0 });
-                          }
+                            console.log(`[OFFLINE MODE] Código OTP para ${correo}: ${codigo}`);              
+                  await RecuperarService.guardarCodigoReset(usuario.id, codigo, expira); // <--- obligatorio
+                  res.json({ mensaje: "Código generado en modo offline", otp: codigo, codigo: 0 });
+                                            }
                         });
                     });
                 });
