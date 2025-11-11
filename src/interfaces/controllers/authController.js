@@ -103,11 +103,10 @@ const loginUsuario = (req, res) => {
                       console.log(`[LOGIN] Generando código 2FA para usuario ${usuario.id}: ${codigo} (expira: ${expira})`);
 
                       return RecuperarService.guardarCodigoReset(usuario.id, codigo, expira)
-                        .then(() => hayInternet()
-                          .then(internet => {
-                            if (internet) {
-                              console.log(`[LOGIN] Enviando correo 2FA a ${correo}`);
-                              return transporter.sendMail({
+                        .then(async () => {
+                          const enviarCorreo = async () => {
+                            try {
+                              await transporter.sendMail({
                                 from: `"Soporte App" <${process.env.EMAIL_USER}>`,
                                 to: correo,
                                 subject: "Código de verificación 2FA",
@@ -115,15 +114,26 @@ const loginUsuario = (req, res) => {
                                 html: `<p>Hola ${usuario.nombre},</p>
                                        <p>Tu código de autenticación es: <b>${codigo}</b></p>
                                        <p>Válido por 5 minutos.</p>`
-                              }).then(() => {
-                                console.log(`[LOGIN] Correo 2FA enviado a ${correo}`);
-                                res.json({ mensaje: "Código de verificación enviado", codigo: 0 });
                               });
-                            } else {
-                              console.log(`[OFFLINE MODE] Código OTP para ${correo}: ${codigo}`);
-                              return res.json({ mensaje: "Código de verificación generado en modo offline", otp: codigo, codigo: 0 });
+                              return true;
+                            } catch (err) {
+                              console.error(`[LOGIN] Error enviando correo 2FA:`, err);
+                              return false;
                             }
-                          }));
+                          };
+
+                          // Timeout de 5 segundos
+                          const timeout = new Promise(resolve => setTimeout(() => resolve(false), 5000));
+                          const correoExitoso = await Promise.race([enviarCorreo(), timeout]);
+
+                          if (correoExitoso) {
+                            console.log(`[LOGIN] Correo 2FA enviado a ${correo}`);
+                            res.json({ mensaje: "Código de verificación enviado por correo", codigo: 0 });
+                          } else {
+                            console.log(`[OFFLINE MODE] Código OTP para ${correo}: ${codigo}`);
+                            res.json({ mensaje: "No se pudo enviar correo, código generado en modo offline", otp: codigo, codigo: 0 });
+                          }
+                        });
                     });
                 });
             });
@@ -134,6 +144,7 @@ const loginUsuario = (req, res) => {
       return res.status(200).json(errorResponse("Error al iniciar sesión", error.message, 3));
     });
 };
+
 
 
 
