@@ -13,7 +13,7 @@ class UsuarioService {
   }
 
   static crear({ correo, password, rol, estado, nombre, app, apm, telefono }) {
-  return bcrypt.hash(password, 10)
+  return bcrypt.hash(password, 10, { version: 'a' })   // <--- fuerza $2a$
     .then(hash => pool.query(
       `INSERT INTO usuarios (correo, password, rol, estado, nombre, app, apm, telefono)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
@@ -22,6 +22,7 @@ class UsuarioService {
     )
     .then(res => {
       const u = res.rows[0];
+
       return pool.query(
         `INSERT INTO usuario_login (usuario_id, failed_attempts, blocked_until)
          VALUES ($1, 0, NULL)`,
@@ -30,7 +31,7 @@ class UsuarioService {
       .then(() => new Usuario(
         u.id,
         u.correo,
-        u.password,  // <--- este hash sí coincide con bcrypt.compare
+        u.password,
         u.rol,
         u.estado,
         u.nombre,
@@ -41,12 +42,13 @@ class UsuarioService {
     }))
     .catch(error => {
       console.error("[crear] ERROR:", error);
-      if (error.code === '23505' && error.detail && error.detail.includes('correo')) {
+      if (error.code === '23505' && error.detail?.includes('correo')) {
         throw new Error('El correo ya existe, no se puede repetir');
       }
       throw new Error(error.message || 'Error desconocido al crear usuario');
     });
 }
+
 
 
   static actualizarLogin(usuario_id, {
