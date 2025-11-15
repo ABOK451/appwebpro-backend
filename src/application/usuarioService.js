@@ -13,33 +13,43 @@ class UsuarioService {
   }
 
   static crear({ correo, password, rol, estado, nombre, app, apm, telefono }) {
-  return bcrypt.hash(password, 10, { version: 'a' })   // <--- fuerza $2a$
-    .then(hash => pool.query(
-      `INSERT INTO usuarios (correo, password, rol, estado, nombre, app, apm, telefono)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-       RETURNING id, correo, password, rol, estado, nombre, app, apm, telefono`,
-      [correo, hash, rol, estado, nombre, app, apm, telefono]
-    )
-    .then(res => {
-      const u = res.rows[0];
+  console.log("[crear] Contraseña original:", password);
+
+  return bcrypt.hash(password, 10) // <-- bcrypt genera $2b$ por defecto, seguro y compatible
+    .then(hash => {
+      console.log("[crear] Hash generado:", hash);
 
       return pool.query(
-        `INSERT INTO usuario_login (usuario_id, failed_attempts, blocked_until)
-         VALUES ($1, 0, NULL)`,
-        [u.id]
+        `INSERT INTO usuarios (correo, password, rol, estado, nombre, app, apm, telefono)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         RETURNING id, correo, password, rol, estado, nombre, app, apm, telefono`,
+        [correo, hash, rol, estado, nombre, app, apm, telefono]
       )
-      .then(() => new Usuario(
-        u.id,
-        u.correo,
-        u.password,
-        u.rol,
-        u.estado,
-        u.nombre,
-        u.app,
-        u.apm,
-        u.telefono
-      ));
-    }))
+      .then(res => {
+        const u = res.rows[0];
+        console.log("[crear] Usuario insertado:", u);
+
+        return pool.query(
+          `INSERT INTO usuario_login (usuario_id, failed_attempts, blocked_until)
+           VALUES ($1, 0, NULL)`,
+          [u.id]
+        )
+        .then(() => {
+          console.log("[crear] Registro de login creado para usuario_id:", u.id);
+          return new Usuario(
+            u.id,
+            u.correo,
+            u.password,  // este hash sí coincide con bcrypt.compare
+            u.rol,
+            u.estado,
+            u.nombre,
+            u.app,
+            u.apm,
+            u.telefono
+          );
+        });
+      });
+    })
     .catch(error => {
       console.error("[crear] ERROR:", error);
       if (error.code === '23505' && error.detail?.includes('correo')) {
@@ -48,6 +58,7 @@ class UsuarioService {
       throw new Error(error.message || 'Error desconocido al crear usuario');
     });
 }
+
 
 
 
