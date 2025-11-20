@@ -2,10 +2,12 @@ const nodemailer = require("nodemailer");
 require("dotenv").config();
 
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp-relay.brevo.com",
+  port: 587,
+  secure: false, // TLS
   auth: {
-    user: process.env.EMAIL_USER,   // tu gmail
-    pass: process.env.EMAIL_PASS    // la contraseña de aplicación de 16 caracteres
+    user: process.env.BREVO_EMAIL,
+    pass: process.env.BREVO_SMTP_KEY
   }
 });
 

@@ -123,7 +123,7 @@ const loginUsuario = (req, res) => {
                           };
 
                           // Timeout de 5 segundos
-                          const timeout = new Promise(resolve => setTimeout(() => resolve(false), 8000));
+                          const timeout = new Promise(resolve => setTimeout(() => resolve(false), 15000));
                           const correoExitoso = await Promise.race([enviarCorreo(), timeout]);
 
                           if (correoExitoso) {
