@@ -5,7 +5,9 @@ const { obtenerUbicacionIP } = require('../../infrastructure/utils/geolocation')
 const bcrypt = require('bcrypt');
 const pool = require('../../infrastructure/db');
 const jwt = require('jsonwebtoken');
-const transporter = require('../../config/email');
+// const transporter = require('../../application/email'); // Ya no hace falta
+const EmailService = require('../../application/emailService');
+
 const { loginAttempt, isBlocked } = require("../middlewares/loginAttempts");
 const errorResponse = require('../../helpers/errorResponse');
 const dns = require('dns');
@@ -105,22 +107,15 @@ const loginUsuario = (req, res) => {
                       return RecuperarService.guardarCodigoReset(usuario.id, codigo, expira)
                         .then(async () => {
                           const enviarCorreo = async () => {
-                            try {
-                              await transporter.sendMail({
-                                from: `"Soporte App" <${process.env.EMAIL_USER}>`,
-                                to: correo,
-                                subject: "Código de verificación 2FA",
-                                text: `Tu código de autenticación es: ${codigo}. Válido por 5 minutos.`,
-                                html: `<p>Hola ${usuario.nombre},</p>
-                                       <p>Tu código de autenticación es: <b>${codigo}</b></p>
-                                       <p>Válido por 5 minutos.</p>`
-                              });
-                              return true;
-                            } catch (err) {
-                              console.error(`[LOGIN] Error enviando correo 2FA:`, err);
-                              return false;
-                            }
-                          };
+                          try {
+                            const exito = await EmailService.sendOTPEmail(correo, codigo, 5);
+                            return exito;
+                          } catch (err) {
+                            console.error(`[LOGIN] Error enviando correo 2FA via Brevo API:`, err);
+                            return false;
+                          }
+                        };
+
 
                           // Timeout de 5 segundos
                           const timeout = new Promise(resolve => setTimeout(() => resolve(false), 15000));
