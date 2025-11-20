@@ -60,15 +60,15 @@ const crearUsuario = (req, res) => {
     return res.status(200).json(errorResponse("Errores de validación", errores, 2)); // 2 = validación
   }
 
-  bcrypt.hash(password, 10)
-    .then(hash => UsuarioService.crear({ correo, password: hash, rol, estado, nombre, app, apm, telefono }))
-    .then(nuevoUsuario => res.status(200).json({ mensaje: "Usuario creado con éxito", usuario: nuevoUsuario, codigo: 0 }))
-    .catch(error => {
-      if (error.code === '23505' && error.detail?.includes('correo')) {
-        return res.status(200).json(errorResponse("El correo ya existe, no se puede repetir", null, 2));
-      }
-      res.status(200).json(errorResponse("Error al crear usuario", error.message, 5));
-    });
+  UsuarioService.crear({ correo, password, rol, estado, nombre, app, apm, telefono })
+  .then(nuevoUsuario => res.status(200).json({ mensaje: "Usuario creado con éxito", usuario: nuevoUsuario, codigo: 0 }))
+  .catch(error => {
+    if (error.code === '23505' && error.detail?.includes('correo')) {
+      return res.status(200).json(errorResponse("El correo ya existe, no se puede repetir", null, 2));
+    }
+    res.status(200).json(errorResponse("Error al crear usuario", error.message, 5));
+  });
+
 };
 
 const eliminarUsuario = (req, res) => {

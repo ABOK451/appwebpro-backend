@@ -13,29 +13,54 @@ class UsuarioService {
   }
 
   static crear({ correo, password, rol, estado, nombre, app, apm, telefono }) {
-    return bcrypt.hash(password, 10)
-      .then(hash => pool.query(
+  console.log("[crear] Contraseña original:", password);
+
+  return bcrypt.hash(password, 10) // <-- bcrypt genera $2b$ por defecto, seguro y compatible
+    .then(hash => {
+      console.log("[crear] Hash generado:", hash);
+
+      return pool.query(
         `INSERT INTO usuarios (correo, password, rol, estado, nombre, app, apm, telefono)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-         RETURNING id, correo, rol, estado, nombre, app, apm, telefono`,
+         RETURNING id, correo, password, rol, estado, nombre, app, apm, telefono`,
         [correo, hash, rol, estado, nombre, app, apm, telefono]
       )
       .then(res => {
         const u = res.rows[0];
+        console.log("[crear] Usuario insertado:", u);
+
         return pool.query(
-          `INSERT INTO usuario_login (usuario_id, failed_attempts, blocked_until) VALUES ($1, 0, NULL)`,
+          `INSERT INTO usuario_login (usuario_id, failed_attempts, blocked_until)
+           VALUES ($1, 0, NULL)`,
           [u.id]
         )
-        .then(() => new Usuario(u.id, u.correo, hash, u.rol, u.estado, u.nombre, u.app, u.apm, u.telefono));
-      }))
-      .catch(error => {
-        console.error("[crear] ERROR:", error);
-        if (error.code === '23505' && error.detail && error.detail.includes('correo')) {
-          throw new Error('El correo ya existe, no se puede repetir');
-        }
-        throw new Error(error.message || 'Error desconocido al crear usuario');
+        .then(() => {
+          console.log("[crear] Registro de login creado para usuario_id:", u.id);
+          return new Usuario(
+            u.id,
+            u.correo,
+            u.password,  // este hash sí coincide con bcrypt.compare
+            u.rol,
+            u.estado,
+            u.nombre,
+            u.app,
+            u.apm,
+            u.telefono
+          );
+        });
       });
-  }
+    })
+    .catch(error => {
+      console.error("[crear] ERROR:", error);
+      if (error.code === '23505' && error.detail?.includes('correo')) {
+        throw new Error('El correo ya existe, no se puede repetir');
+      }
+      throw new Error(error.message || 'Error desconocido al crear usuario');
+    });
+}
+
+
+
 
   static actualizarLogin(usuario_id, {
     failed_attempts=null, blocked_until=null, ultimo_login=null,
