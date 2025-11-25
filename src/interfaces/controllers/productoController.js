@@ -29,13 +29,13 @@ const crearProducto = (req, res) => {
   if (!id_categoria) errores.push({ campo: "id_categoria", mensaje: "El id_categoria es obligatorio." });
 
   if (nombre && (nombre.length <3 || nombre.length > 53))
-  errores.push({ campo: "nombre", mensaje: "El nombre debe tener entre 2 y 100 caracteres." });
+  errores.push({ campo: "nombre", mensaje: "El nombre debe tener entre 3 y 53 caracteres." });
   if (codigo && (codigo.length < 3 || codigo.length > 10))
-    errores.push({ campo: "codigo", mensaje: "El código debe tener entre 2 y 30 caracteres." });
+    errores.push({ campo: "codigo", mensaje: "El código debe tener entre 3 y 10 caracteres." });
   if (descripcion && descripcion.length > 100)
-    errores.push({ campo: "descripcion", mensaje: "La descripción no puede superar los 300 caracteres." });
+    errores.push({ campo: "descripcion", mensaje: "La descripción no puede superar los 100 caracteres." });
   if (proveedor && (proveedor.length < 3 || proveedor.length > 53))
-    errores.push({ campo: "proveedor", mensaje: "El proveedor debe tener entre 2 y 100 caracteres." });
+    errores.push({ campo: "proveedor", mensaje: "El proveedor debe tener entre 3 y 53 caracteres." });
   
   if (errores.length > 0) 
     return res.status(200).json(errorResponse("Errores de validación", errores, 2));
@@ -134,13 +134,13 @@ const actualizarProducto = (req, res) => {
   if (!id_categoria) errores.push({ campo: "id_categoria", mensaje: "La categoría es obligatoria." });
 
    if (nombre && (nombre.length <3 || nombre.length > 53))
-  errores.push({ campo: "nombre", mensaje: "El nombre debe tener entre 2 y 100 caracteres." });
+  errores.push({ campo: "nombre", mensaje: "El nombre debe tener entre 3 y 53 caracteres." });
   if (codigo && (codigo.length < 3 || codigo.length > 10))
-    errores.push({ campo: "codigo", mensaje: "El código debe tener entre 2 y 30 caracteres." });
+    errores.push({ campo: "codigo", mensaje: "El código debe tener entre 3 y 10 caracteres." });
   if (descripcion && descripcion.length > 100)
-    errores.push({ campo: "descripcion", mensaje: "La descripción no puede superar los 300 caracteres." });
+    errores.push({ campo: "descripcion", mensaje: "La descripción no puede superar los 100 caracteres." });
   if (proveedor && (proveedor.length < 3 || proveedor.length > 53))
-    errores.push({ campo: "proveedor", mensaje: "El proveedor debe tener entre 2 y 100 caracteres." });
+    errores.push({ campo: "proveedor", mensaje: "El proveedor debe tener entre 3 y 53 caracteres." });
 
   if (errores.length > 0)
     return res.status(200).json(errorResponse("Errores de validación", errores, 2));
