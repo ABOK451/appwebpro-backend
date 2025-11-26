@@ -1,4 +1,4 @@
-const SibApiV3Sdk = require('@sendinblue/client');
+const SibApiV3Sdk = require("@sendinblue/client");
 
 class EmailService {
   constructor() {
@@ -7,23 +7,26 @@ class EmailService {
       SibApiV3Sdk.TransactionalEmailsApiApiKeys.apiKey,
       process.env.BREVO_API_KEY
     );
-    this.fromEmail = 'avoc451@gmail.com'; // email verificado en Brevo
-    this.fromName = 'Soporte App';
+    this.fromEmail = "avoc451@gmail.com"; // email verificado en Brevo
+    this.fromName = "Soporte App";
   }
 
   async sendOTPEmail(to, otp, expiresInMinutes = 5) {
     const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
     sendSmtpEmail.sender = { email: this.fromEmail, name: this.fromName };
     sendSmtpEmail.to = [{ email: to }];
-    sendSmtpEmail.subject = 'Código de acceso (OTP)';
+    sendSmtpEmail.subject = "Código de acceso (OTP)";
     sendSmtpEmail.htmlContent = `<p>Tu código OTP es: <b>${otp}</b></p>
                                  <p>Expira en ${expiresInMinutes} minutos.</p>`;
     try {
       const response = await this.apiInstance.sendTransacEmail(sendSmtpEmail);
-      console.log('[Brevo API] OTP enviado:', response);
+      console.log("[Brevo API] OTP enviado:", response);
       return true;
     } catch (error) {
-      console.error('[Brevo API] Error enviando OTP:', error.response?.body || error);
+      console.error(
+        "[Brevo API] Error enviando OTP:",
+        error.response?.body || error
+      );
       return false;
     }
   }
@@ -39,10 +42,43 @@ class EmailService {
                                  <p>Válido por ${minutosExpiracion} minutos.</p>`;
     try {
       const response = await this.apiInstance.sendTransacEmail(sendSmtpEmail);
-      console.log('[Brevo API] Email de recuperación enviado:', response);
+      console.log("[Brevo API] Email de recuperación enviado:", response);
       return true;
     } catch (error) {
-      console.error('[Brevo API] Error enviando correo de recuperación:', error.response?.body || error);
+      console.error(
+        "[Brevo API] Error enviando correo de recuperación:",
+        error.response?.body || error
+      );
+      return false;
+    }
+  }
+
+  async sendLowStockEmail(to, productoNombre, stockActual, stockMaximo) {
+    const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
+    sendSmtpEmail.sender = { email: this.fromEmail, name: this.fromName };
+    sendSmtpEmail.to = [{ email: to }];
+    sendSmtpEmail.subject = `⚠️ Alerta de Stock Bajo: ${productoNombre}`;
+
+    // Contenido simple
+    sendSmtpEmail.htmlContent = `
+    <h1>Alerta de Inventario</h1>
+    <p>El producto <strong>${productoNombre}</strong> ha alcanzado niveles críticos.</p>
+    <ul>
+      <li>Stock Actual: <b>${stockActual}</b></li>
+      <li>Stock Ideal (Meta): <b>${stockMaximo}</b></li>
+    </ul>
+    <p>Se recomienda reabastecer pronto.</p>
+  `;
+
+    try {
+      const response = await this.apiInstance.sendTransacEmail(sendSmtpEmail);
+      console.log("[Brevo API] Alerta de stock enviada:", response);
+      return true;
+    } catch (error) {
+      console.error(
+        "[Brevo API] Error enviando alerta de stock:",
+        error.response?.body || error
+      );
       return false;
     }
   }
@@ -58,10 +94,13 @@ class EmailService {
                                  <p>Tu cuenta ha sido bloqueada temporalmente hasta <b>${untilDate.toLocaleString()}</b> debido a múltiples intentos fallidos de inicio de sesión.</p>`;
     try {
       const response = await this.apiInstance.sendTransacEmail(sendSmtpEmail);
-      console.log('[Brevo API] Email de cuenta bloqueada enviado:', response);
+      console.log("[Brevo API] Email de cuenta bloqueada enviado:", response);
       return true;
     } catch (error) {
-      console.error('[Brevo API] Error enviando correo de cuenta bloqueada:', error.response?.body || error);
+      console.error(
+        "[Brevo API] Error enviando correo de cuenta bloqueada:",
+        error.response?.body || error
+      );
       return false;
     }
   }
