@@ -30,9 +30,17 @@ const listarUsuarios = (req, res) => {
         usuarios
       });
     })
-    .catch(error => res.status(200).json(
-      errorResponse("Error al listar usuarios", error.message, 5) // 5 = error servidor
-    ));
+    .catch(error => {
+      console.error("[LISTAR_USUARIOS] Error:", error);
+
+      if (error.code === 'ECONNREFUSED')
+        return res.status(200).json(errorResponse("Error de conexión a la base de datos", null, 7));
+
+      if (error.code === 'ETIMEDOUT')
+        return res.status(200).json(errorResponse("Tiempo de espera agotado al listar usuarios", null, 8));
+
+      return res.status(200).json(errorResponse("Error al listar usuarios", error.message, 5));
+    });
 };
 
 const crearUsuario = (req, res) => {
@@ -99,15 +107,31 @@ const crearUsuario = (req, res) => {
     return res.status(200).json(errorResponse("Errores de validación", errores, 2));
 
   UsuarioService.crear({ correo, password, rol, estado, nombre, app, apm, telefono })
-    .then(nuevoUsuario => res.status(200).json({ mensaje: "Usuario creado con éxito", usuario: nuevoUsuario, codigo: 0 }))
+    .then(nuevoUsuario =>
+      res.status(200).json({ mensaje: "Usuario creado con éxito", usuario: nuevoUsuario, codigo: 0 })
+    )
     .catch(error => {
-      if (error.code === '23505' && error.detail?.includes('correo')) {
+      console.error("[CREAR_USUARIO] Error:", error);
+
+      // Violación de clave única
+      if (error.code === '23505')
         return res.status(200).json(errorResponse("El correo ya existe, no se puede repetir", null, 2));
-      }
-      res.status(200).json(errorResponse("Error al crear usuario", error.message, 5));
+
+      // Error de conexión
+      if (error.code === 'ECONNREFUSED')
+        return res.status(200).json(errorResponse("Error de conexión a la base de datos", null, 7));
+
+      // Timeout
+      if (error.code === 'ETIMEDOUT')
+        return res.status(200).json(errorResponse("Tiempo de espera agotado al crear usuario", null, 8));
+
+      // Error sintaxis SQL
+      if (error.code === '42601')
+        return res.status(200).json(errorResponse("Error en la sintaxis SQL", null, 9));
+
+      return res.status(200).json(errorResponse("Error al crear usuario", error.message, 5));
     });
 };
-
 
 const eliminarUsuario = (req, res) => {
   const { correo } = req.body;
@@ -116,14 +140,27 @@ const eliminarUsuario = (req, res) => {
   if (!correo) errores.push("El correo es requerido para eliminar un usuario");
   else if (!correoRegex.test(correo)) errores.push("El correo no tiene un formato válido");
 
-  if (errores.length > 0) return res.status(200).json(errorResponse("Errores de validación", errores, 2));
+  if (errores.length > 0)
+    return res.status(200).json(errorResponse("Errores de validación", errores, 2));
 
   UsuarioService.eliminar({ correo })
     .then(usuarioEliminado => {
-      if (!usuarioEliminado) return res.status(200).json(errorResponse(`Usuario con correo ${correo} no encontrado`, null, 3));
+      if (!usuarioEliminado)
+        return res.status(200).json(errorResponse(`Usuario con correo ${correo} no encontrado`, null, 3));
+
       res.json({ mensaje: `Usuario ${usuarioEliminado.nombre} eliminado con éxito`, codigo: 0 });
     })
-    .catch(error => res.status(200).json(errorResponse("Error al eliminar usuario", error.message, 5)));
+    .catch(error => {
+      console.error("[ELIMINAR_USUARIO] Error:", error);
+
+      if (error.code === 'ECONNREFUSED')
+        return res.status(200).json(errorResponse("Error de conexión a la base de datos", null, 7));
+
+      if (error.code === 'ETIMEDOUT')
+        return res.status(200).json(errorResponse("Tiempo de espera agotado al eliminar usuario", null, 8));
+
+      return res.status(200).json(errorResponse("Error al eliminar usuario", error.message, 5));
+    });
 };
 
 const actualizarUsuario = (req, res) => {
@@ -198,9 +235,21 @@ const actualizarUsuario = (req, res) => {
 
       res.json({ mensaje: "Usuario actualizado con éxito", usuario: usuarioActualizado, codigo: 0 });
     })
-    .catch(error => res.status(200).json(errorResponse("Error al actualizar usuario", error.message, 5)));
-};
+    .catch(error => {
+      console.error("[ACTUALIZAR_USUARIO] Error:", error);
 
+      if (error.code === 'ECONNREFUSED')
+        return res.status(200).json(errorResponse("Error de conexión a la base de datos", null, 7));
+
+      if (error.code === 'ETIMEDOUT')
+        return res.status(200).json(errorResponse("Tiempo de espera agotado al actualizar usuario", null, 8));
+
+      if (error.code === '23505')
+        return res.status(200).json(errorResponse("El correo ya existe, no se puede usar ese correo", null, 2));
+
+      return res.status(200).json(errorResponse("Error al actualizar usuario", error.message, 5));
+    });
+};
 
 module.exports = {
   listarUsuarios,
