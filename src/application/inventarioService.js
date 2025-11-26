@@ -104,7 +104,7 @@ static registrar({ id_producto, tipo_movimiento, cantidad, descripcion }) {
 static actualizar({ id, tipo_movimiento, cantidad, descripcion }) {
 
   return pool.query(
-    `SELECT id_producto, tipo_movimiento, cantidad
+    `SELECT  codigo_producto, tipo_movimiento, cantidad
      FROM bitacora
      WHERE id = $1`,
     [id]

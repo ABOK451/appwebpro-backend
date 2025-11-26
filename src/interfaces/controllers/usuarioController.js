@@ -6,8 +6,8 @@ const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
 const nombreRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ]+(?:\s[A-Za-zÁÉÍÓÚáéíóúÑñ]+)*$/;
 const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Longitudes
-const MIN_NOMBRE = 2, MAX_NOMBRE = 50;
+
+const MIN_NOMBRE = 3, MAX_NOMBRE = 50;
 const MIN_CORREO = 5, MAX_CORREO = 100;
 const MAX_PASSWORD = 100;
 const MIN_ROL = 4, MAX_ROL = 10;
