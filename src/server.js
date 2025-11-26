@@ -52,14 +52,46 @@ app.use((req, res, next) => {
 // CORS
 app.use(cors({
   origin: "*",
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: false
+  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
+  allowedHeaders: ["Content-Type","Authorization"]
 }));
 
-app.options("*", cors());
+// Swagger
+const swaggerUsuarios = YAML.load("./src/config/OpenApi/swagger.yaml");
+const swaggerProductos = YAML.load("./src/config/OpenApi/swagger-productos.yaml");
+const swaggerBitacora = YAML.load("./src/config/OpenApi/swagger-bitacora.yaml");
+const swaggerReporte = YAML.load("./src/config/OpenApi/swagger-reporte.yaml");
 
+const swaggerDocument = {
+  openapi: "3.0.0",
+  info: {
+    title: "API Completa",
+    version: "1.0.0"
+  },
+  servers: swaggerUsuarios.servers || [],
+  paths: {
+    ...swaggerUsuarios.paths,
+    ...swaggerProductos.paths,
+    ...swaggerBitacora.paths,
+    ...swaggerReporte.paths
+  },
+  components: {
+    securitySchemes: {
+      ...(swaggerUsuarios.components.securitySchemes || {}),
+      ...(swaggerProductos.components.securitySchemes || {}),
+      ...(swaggerBitacora.components.securitySchemes || {}),
+      ...(swaggerReporte.components.securitySchemes || {}),
+    },
+    schemas: {
+      ...(swaggerUsuarios.components.schemas || {}),
+      ...(swaggerProductos.components.schemas || {}),
+      ...(swaggerBitacora.components.schemas || {}),
+      ...(swaggerReporte.components.schemas || {}),
+    }
+  }
+};
 
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // Rutas
 app.use("/", pingRoutes);
