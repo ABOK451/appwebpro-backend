@@ -52,9 +52,11 @@ app.use((req, res, next) => {
 // CORS
 app.use(cors({
   origin: "*",
-  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
-  allowedHeaders: ["Content-Type","Authorization"]
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: false
 }));
+
 
 // Swagger
 const swaggerUsuarios = YAML.load("./src/config/OpenApi/swagger.yaml");
