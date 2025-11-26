@@ -2,7 +2,7 @@ const UsuarioService = require('../../application/usuarioService');
 const RecuperarService = require('../../application/recuperarService');
 const bcrypt = require('bcrypt'); 
 const dns = require('dns');
-const transporter = require('../../config/email');
+const EmailService = require('../../application/emailService');
 const errorResponse = require('../../helpers/errorResponse');
 
 const correoRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -14,7 +14,7 @@ const hayInternet = () => {
   });
 };
 
-const solicitarReset = (req, res) => {
+const solicitarReset = async (req, res) => {
   const { correo } = req.body;
   const errores = [];
 
@@ -25,40 +25,42 @@ const solicitarReset = (req, res) => {
     return res.status(200).json(errorResponse("Errores de validación", errores, 2));
   }
 
-  // Retornamos la promesa completa
-  return UsuarioService.buscarPorCorreo(correo)
-    .then(usuario => {
-      if (!usuario) return res.status(200).json(errorResponse("Usuario no encontrado", null, 3));
+  try {
+    const usuario = await UsuarioService.buscarPorCorreo(correo);
+    if (!usuario) return res.status(200).json(errorResponse("Usuario no encontrado", null, 3));
 
-      const codigo = Math.floor(100000 + Math.random() * 900000).toString();
-      const expira = new Date(Date.now() + 5 * 60000); // 5 minutos
+    const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+    const expira = new Date(Date.now() + 5 * 60000); // 5 minutos
 
-      return RecuperarService.guardarCodigoReset(usuario.id, codigo, expira)
-        .then(ok => {
-          if (!ok) return res.status(200).json(errorResponse("No se pudo generar el código de recuperación", null, 3));
+    const ok = await RecuperarService.guardarCodigoReset(usuario.id, codigo, expira);
+    if (!ok) return res.status(200).json(errorResponse("No se pudo generar el código de recuperación", null, 3));
 
-          return hayInternet().then(internet => {
-            if (internet) {
-              return transporter.sendMail({
-                from: `"Soporte App" <${process.env.EMAIL_USER}>`,
-                to: correo,
-                subject: "Recuperación de contraseña",
-                text: `Tu código de recuperación es: ${codigo}. Válido por 5 minutos.`,
-                html: `<p>Hola ${usuario.nombre},</p>
-                       <p>Tu código de recuperación es: <b>${codigo}</b></p>
-                       <p>Válido por 5 minutos.</p>`
-              }).then(() => res.json({ mensaje: "Código de verificación enviado al correo", codigo: 0 }));
-            } else {
-              console.log(`[OFFLINE MODE] Código OTP para ${correo}: ${codigo}`);
-              return res.json({ mensaje: "Código de verificación generado en modo offline", otp: codigo, codigo: 0 });
-            }
-          });
-        });
-    })
-    .catch(error => {
-      console.error("Error solicitarReset:", error);
-      return res.status(200).json(errorResponse("Error al generar código", error.message, 3));
-    });
+    const internet = await hayInternet();
+    if (internet) {
+      const correoExitoso = await EmailService.sendRecoveryEmail(
+        correo,
+        codigo,
+        usuario.nombre,
+        5
+      );
+
+      if (correoExitoso) {
+        return res.json({ mensaje: "Código de verificación enviado al correo", codigo: 0 });
+      } else {
+        console.log(`[OFFLINE MODE] Código OTP para ${correo}: ${codigo}`);
+        await RecuperarService.guardarCodigoReset(usuario.id, codigo, expira);
+        return res.json({ mensaje: "Código de verificación generado en modo offline", otp: codigo, codigo: 0 });
+      }
+    } else {
+      // Sin internet: devolver OTP en modo offline y guardar de nuevo (o simplemente devolver)
+      console.log(`[OFFLINE MODE] Sin conexión. Código OTP para ${correo}: ${codigo}`);
+      await RecuperarService.guardarCodigoReset(usuario.id, codigo, expira);
+      return res.json({ mensaje: "Sin conexión, código generado en modo offline", otp: codigo, codigo: 0 });
+    }
+  } catch (error) {
+    console.error("Error solicitarReset:", error);
+    return res.status(200).json(errorResponse("Error al generar código", error.message, 3));
+  }
 };
 
 const resetConCodigo = (req, res) => {

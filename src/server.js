@@ -104,7 +104,6 @@ app.use("/", invetarioRoutes);
 app.use("/", reporteRoutes);
 app.use("/", categoriaRoutes);
 
-// SOLO HTTP 🙌
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
