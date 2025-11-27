@@ -51,9 +51,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cors({
   origin: [
     process.env.FRONTEND_URL || "http://localhost:3000",
-    "https://inventario-xi-nine.vercel.app",
-    "https://appwebpro-backend.onrender.com"
-  ],
+    "https://inventario-xi-nine.vercel.app"
+    ],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: [
     "Content-Type",
