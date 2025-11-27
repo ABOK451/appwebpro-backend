@@ -48,19 +48,34 @@ app.use(express.urlencoded({ extended: true }));
    🚀 CORS CONFIG EXACTAMENTE COMO LA PEDISTE
    Compatible con Vercel, Render y redes agresivas
 ******************************************************** */
+const allowedOrigins = [
+  "https://inventario-xi-nine.vercel.app"
+];
+
+app.use((req, res, next) => {
+  console.log("[CORS] Origin recibido:", req.headers.origin);
+  next();
+});
+
 app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || "http://localhost:3000",
-    "https://inventario-xi-nine.vercel.app"
-    ],
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Content-Type",
-    "Authorization",
-    "ngrok-skip-browser-warning"
-  ],
-  credentials: true
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // para Postman
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error("CORS bloqueado por origen no permitido: " + origin));
+    }
+  },
+  methods: "GET,POST,PUT,DELETE,OPTIONS",
+  allowedHeaders: "Content-Type, Authorization",
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
+
+// MUY IMPORTANTE: responder OPTIONS
+app.options("*", cors());
 
 // Bypass ngrok warning (si tu frontend usa ngrok en pruebas)
 app.use((req, res, next) => {
