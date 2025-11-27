@@ -54,17 +54,30 @@ const allowedOrigins = [
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  res.setHeader("Access-Control-Allow-Origin", origin || "*");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Vary", "Origin");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
+  // Esto hace compatible CORS con redes que reescriben el origin.
+  res.setHeader("Access-Control-Allow-Origin", origin || "*");
+  res.setHeader("Vary", "Origin");
+
+  // Deja pasar credenciales en redes que bloquean OPTIONS
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+
+  // MUY IMPORTANTE:
+  // Content-Type y Authorization deben ser explícitos o las redes lo bloquean
+  res.setHeader("Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With, Accept"
+  );
+
+  // Preflight OPTIONS debe terminar AQUÍ
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
+
   next();
 });
+
 
 
 
