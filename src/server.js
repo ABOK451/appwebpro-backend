@@ -12,7 +12,7 @@ const productosRoutes = require("./interfaces/routes/productoRoutes");
 const invetarioRoutes = require("./interfaces/routes/inventarioRoutes");
 const reporteRoutes = require("./interfaces/routes/reporteRoutes");
 const categoriaRoutes = require("./interfaces/routes/categoriaRoutes");
-const errorResponse = require('./helpers/errorResponse');
+const errorResponse = require("../../helpers/errorResponse"); // pero solo si helpers está fuera de interfaces
 
 require("dotenv").config();
 
