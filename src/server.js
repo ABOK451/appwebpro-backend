@@ -79,7 +79,6 @@ app.use(cors({
 }));
 
 // MUY IMPORTANTE: responder OPTIONS
-app.options("*", cors());
 
 // Bypass ngrok warning (si tu frontend usa ngrok en pruebas)
 app.use((req, res, next) => {
