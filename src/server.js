@@ -45,13 +45,22 @@ app.use(express.urlencoded({ extended: true }));
 
 
 
-// CORS
+// CORS universal máximo compatible
 app.use(cors({
-  origin: "*",
+  origin: (origin, callback) => {
+    // Permite cualquier origen pero SIN usar "*"
+    callback(null, true);
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: false
+  credentials: true,               // Hace la conexión más aceptada por firewalls
+  preflightContinue: false,
+  optionsSuccessStatus: 200        // Evita resets en redes antiguas o agresivas
 }));
+
+// Manejar preflight OPTIONS
+app.options("*", cors());
+
 
 
 // Swagger
