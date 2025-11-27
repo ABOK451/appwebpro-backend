@@ -43,11 +43,7 @@ app.use((req, res, next) => {
 
 app.use(express.urlencoded({ extended: true }));
 
-// Logs de headers
-app.use((req, res, next) => {
-  console.log("[GLOBAL HEADERS]", req.headers);
-  next();
-});
+
 
 // CORS
 app.use(cors({
