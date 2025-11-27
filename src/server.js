@@ -59,8 +59,9 @@ app.use(cors({
 }));
 
 // Manejar preflight OPTIONS
-app.options("*", cors());
+app.use(cors());
 
+console.log("Cargando rutas...");
 
 
 // Swagger
