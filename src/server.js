@@ -12,7 +12,7 @@ const productosRoutes = require("./interfaces/routes/productoRoutes");
 const invetarioRoutes = require("./interfaces/routes/inventarioRoutes");
 const reporteRoutes = require("./interfaces/routes/reporteRoutes");
 const categoriaRoutes = require("./interfaces/routes/categoriaRoutes");
-const errorResponse = require("../../helpers/errorResponse"); // pero solo si helpers está fuera de interfaces
+const errorResponse = require("./helpers/errorResponse"); // pero solo si helpers está fuera de interfaces
 
 require("dotenv").config();
 
@@ -53,12 +53,17 @@ const allowedOrigins = [
 ];
 
 app.use((req, res, next) => {
-  console.log("----- PRE-FLIGHT / REQUEST -----");
-  console.log("Método:", req.method);
-  console.log("Origin:", req.headers.origin);
-  console.log("Headers:", req.headers);
+  res.header("Access-Control-Allow-Origin", "https://inventario-xi-nine.vercel.app");
+  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
   next();
 });
+
 
 
 app.use(cors({
@@ -78,17 +83,6 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
-/* *******************************************************
-   🚀 FIX DURO PARA RENDER + CLOUDFLARE
-   Forzar respuesta OPTIONS ANTES de las rutas
-******************************************************** */
-app.options("*", (req, res) => {
-  console.log("[FORZANDO PRE-FLIGHT OPTIONS]");
-  res.setHeader("Access-Control-Allow-Origin", "https://inventario-xi-nine.vercel.app");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.status(204).send();
-});
 
 
 // MUY IMPORTANTE: responder OPTIONS
