@@ -53,9 +53,13 @@ const allowedOrigins = [
 ];
 
 app.use((req, res, next) => {
-  console.log("[CORS] Origin recibido:", req.headers.origin);
+  console.log("----- PRE-FLIGHT / REQUEST -----");
+  console.log("Método:", req.method);
+  console.log("Origin:", req.headers.origin);
+  console.log("Headers:", req.headers);
   next();
 });
+
 
 app.use(cors({
   origin: function (origin, callback) {
