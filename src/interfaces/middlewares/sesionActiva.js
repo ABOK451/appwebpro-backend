@@ -4,46 +4,47 @@ const errorResponse = require('../../helpers/errorResponse');
 
 const verificarSesionActiva = async (req, res, next) => {
   const correo = req.body?.correo;
-  console.log("[verificarSesionActiva] Inicio de verificación para correo:", correo);
+  console.log("[verificarSesionActiva] Inicio. Correo recibido:", correo);
 
   if (!correo) {
-    console.log("[verificarSesionActiva] FALTA_CORREO");
-    return res.status(200).json(
-      errorResponse("Correo es requerido", null, 2) // 2 = validación
+    console.log("[verificarSesionActiva] ERROR: Falta correo.");
+    return res.status(400).json(
+      errorResponse("Correo es requerido", null, 2)
     );
   }
 
-  const client = await pool.connect();
+  let client;
 
   try {
-    await client.query('BEGIN');
+    client = await pool.connect();
 
     const usuarioRes = await client.query(
-      `SELECT * FROM usuarios WHERE correo = $1 FOR UPDATE`,
+      `SELECT * FROM usuarios WHERE correo = $1`,
       [correo]
     );
     const usuario = usuarioRes.rows[0];
 
     if (!usuario) {
-      await client.query('ROLLBACK');
-      console.log("[verificarSesionActiva] Usuario no encontrado:", correo);
-      return res.status(200).json(
-        errorResponse("Usuario no encontrado", null, 3) // 3 = no encontrado
+      console.log("[verificarSesionActiva] Usuario NO encontrado:", correo);
+      return res.status(404).json(
+        errorResponse("Usuario no encontrado", null, 3)
       );
     }
 
     const loginRes = await client.query(
-      `SELECT * FROM usuario_login WHERE usuario_id = $1 FOR UPDATE`,
+      `SELECT * FROM usuario_login WHERE usuario_id = $1`,
       [usuario.id]
     );
     const login = loginRes.rows[0];
+
     const ahora = new Date();
 
-    if (login && login.sesion_activa && login.fin_sesion > ahora) {
-      await client.query('COMMIT');
-      console.log("[verificarSesionActiva] Sesión sigue activa");
+    if (login) login.fin_sesion = login.fin_sesion ? new Date(login.fin_sesion) : null;
 
-      const tiempoRestanteMin = Math.ceil((new Date(login.fin_sesion) - ahora) / 60000);
+    if (login && login.sesion_activa && login.fin_sesion > ahora) {
+      console.log("[verificarSesionActiva] Sesión activa detectada.");
+
+      const tiempoRestanteMin = Math.ceil((login.fin_sesion - ahora) / 60000);
 
       return res.status(200).json({
         mensaje: "Ya existe una sesión activa",
@@ -53,62 +54,66 @@ const verificarSesionActiva = async (req, res, next) => {
       });
     }
 
-    console.log("[verificarSesionActiva] No hay sesión activa o expiró, continuando...");
-    await client.query('COMMIT');
+    console.log("[verificarSesionActiva] No hay sesión activa. Continuando...");
     next();
 
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error("[verificarSesionActiva] ERROR:", error);
-    return res.status(200).json(
-      errorResponse("Error al verificar sesión activa", error.message, 5) // 5 = error servidor
+    return res.status(500).json(
+      errorResponse("Error al verificar sesión activa", error.message, 5)
     );
   } finally {
-    client.release();
+    if (client) client.release();
   }
 };
+
 
  const extenderSesion = async (req, res, next) => {
   try {
     const token = req.headers['authorization']?.split(' ')[1];
 
     if (!token) {
-      return res.status(200).json(errorResponse("No se pudo obtener la sesión. Necesitas iniciar sesión.", null, 1));
+      console.log("[extenderSesion] ERROR: Token no recibido");
+      return res.status(401).json(errorResponse("Token no enviado. Inicia sesión.", null, 1));
     }
 
     const usuario = await UsuarioService.buscarPorToken(token);
 
     if (!usuario || !usuario.sesion_activa) {
-      return res.status(200).json(errorResponse("La sesión no está activa. Necesitas iniciar sesión nuevamente.", null, 2));
+      console.log("[extenderSesion] Sesión NO activa");
+      return res.status(401).json(errorResponse("Sesión no activa. Inicia sesión nuevamente.", null, 2));
     }
 
     const ahora = new Date();
+    const finActual = new Date(usuario.fin_sesion);
 
-    if (usuario.fin_sesion && usuario.fin_sesion > ahora) {
-      const nuevaFin = new Date(usuario.fin_sesion.getTime() + 3 * 60000);
+    if (finActual > ahora) {
+      const nuevaFin = new Date(finActual.getTime() + 3 * 60000);
       await UsuarioService.actualizarLogin(usuario.id, { fin_sesion: nuevaFin });
 
-      const tiempoRestanteMin = Math.ceil((nuevaFin.getTime() - ahora.getTime()) / 60000);
+      req.tiempo_restante_min = Math.ceil((nuevaFin - ahora) / 60000);
 
-      const originalJson = res.json.bind(res);
-      res.json = (body) => {
-        if (body && typeof body === 'object') {
-          body.tiempo_restante_min = tiempoRestanteMin;
-        }
-        return originalJson(body);
-      };
-
-      next();
-    } else {
-      await UsuarioService.actualizarLogin(usuario.id, { sesion_activa: false, fin_sesion: null });
-      return res.status(200).json(errorResponse("La sesión expiró. Necesitas iniciar sesión nuevamente.", null, 3));
+      console.log("[extenderSesion] Sesión extendida. Minutos restantes:", req.tiempo_restante_min);
+      return next();
     }
 
+    console.log("[extenderSesion] Sesión expiró.");
+
+    await UsuarioService.actualizarLogin(usuario.id, {
+      sesion_activa: false,
+      fin_sesion: null
+    });
+
+    return res.status(440).json( // 440 = Login Timeout
+      errorResponse("La sesión expiró. Inicia sesión nuevamente.", null, 3)
+    );
+
   } catch (err) {
-    console.error("[extenderSesion] Error:", err);
-    return res.status(200).json(errorResponse("Error al validar la sesión", err.message, 5));
+    console.error("[extenderSesion] ERROR:", err);
+    return res.status(500).json(errorResponse("Error al validar sesión", err.message, 5));
   }
 };
+
 
 
 module.exports = { verificarSesionActiva, extenderSesion };
