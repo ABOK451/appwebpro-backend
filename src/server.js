@@ -12,12 +12,13 @@ const productosRoutes = require("./interfaces/routes/productoRoutes");
 const invetarioRoutes = require("./interfaces/routes/inventarioRoutes");
 const reporteRoutes = require("./interfaces/routes/reporteRoutes");
 const categoriaRoutes = require("./interfaces/routes/categoriaRoutes");
-const errorResponse = require('./helpers/errorResponse'); 
+const errorResponse = require('./helpers/errorResponse');
+
 require("dotenv").config();
 
 const app = express();
 
-// Middleware JSON seguro
+/* -------------------- JSON seguro -------------------- */
 app.use(express.json({
   verify: (req, res, buf, encoding) => {
     try {
@@ -28,7 +29,6 @@ app.use(express.json({
   }
 }));
 
-// Manejo de JSON inválido
 app.use((req, res, next) => {
   if (req.invalidJson) {
     return res.status(400).json(errorResponse(
@@ -44,27 +44,32 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: true }));
 
 
-
-// CORS universal máximo compatible
+/* *******************************************************
+   🚀 CORS CONFIG EXACTAMENTE COMO LA PEDISTE
+   Compatible con Vercel, Render y redes agresivas
+******************************************************** */
 app.use(cors({
-  origin: (origin, callback) => {
-    // Permite cualquier origen pero SIN usar "*"
-    callback(null, true);
-  },
+  origin: [
+    process.env.FRONTEND_URL || "http://localhost:3000",
+    "https://inventario-xi-nine.vercel.app",
+    "https://appwebpro-backend.onrender.com"
+  ],
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true,               // Hace la conexión más aceptada por firewalls
-  preflightContinue: false,
-  optionsSuccessStatus: 200        // Evita resets en redes antiguas o agresivas
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "ngrok-skip-browser-warning"
+  ],
+  credentials: true
 }));
 
-// Manejar preflight OPTIONS
-app.use(cors());
+// Bypass ngrok warning (si tu frontend usa ngrok en pruebas)
+app.use((req, res, next) => {
+  res.setHeader("ngrok-skip-browser-warning", "true");
+  next();
+});
 
-console.log("Cargando rutas...");
-
-
-// Swagger
+/* -------------------- Swagger -------------------- */
 const swaggerUsuarios = YAML.load("./src/config/OpenApi/swagger.yaml");
 const swaggerProductos = YAML.load("./src/config/OpenApi/swagger-productos.yaml");
 const swaggerBitacora = YAML.load("./src/config/OpenApi/swagger-bitacora.yaml");
@@ -72,10 +77,7 @@ const swaggerReporte = YAML.load("./src/config/OpenApi/swagger-reporte.yaml");
 
 const swaggerDocument = {
   openapi: "3.0.0",
-  info: {
-    title: "API Completa",
-    version: "1.0.0"
-  },
+  info: { title: "API Completa", version: "1.0.0" },
   servers: swaggerUsuarios.servers || [],
   paths: {
     ...swaggerUsuarios.paths,
@@ -88,20 +90,20 @@ const swaggerDocument = {
       ...(swaggerUsuarios.components.securitySchemes || {}),
       ...(swaggerProductos.components.securitySchemes || {}),
       ...(swaggerBitacora.components.securitySchemes || {}),
-      ...(swaggerReporte.components.securitySchemes || {}),
+      ...(swaggerReporte.components.securitySchemes || {})
     },
     schemas: {
       ...(swaggerUsuarios.components.schemas || {}),
       ...(swaggerProductos.components.schemas || {}),
       ...(swaggerBitacora.components.schemas || {}),
-      ...(swaggerReporte.components.schemas || {}),
+      ...(swaggerReporte.components.schemas || {})
     }
   }
 };
 
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-// Rutas
+/* -------------------- Rutas -------------------- */
 app.use("/", pingRoutes);
 app.use("/", usuarioRoutes);
 app.use("/", recuperarRoutes);
@@ -112,8 +114,8 @@ app.use("/", invetarioRoutes);
 app.use("/", reporteRoutes);
 app.use("/", categoriaRoutes);
 
+/* -------------------- Servidor -------------------- */
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
   console.log(`✅ Servidor HTTP corriendo en http://localhost:${PORT}`);
 });
