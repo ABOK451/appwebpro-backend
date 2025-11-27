@@ -53,9 +53,15 @@ const allowedOrigins = [
 ];
 
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://inventario-xi-nine.vercel.app");
+  const origin = req.headers.origin;
+
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+
   res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Credentials", "true");
 
   if (req.method === "OPTIONS") {
     return res.sendStatus(204);
@@ -64,24 +70,6 @@ app.use((req, res, next) => {
   next();
 });
 
-
-
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true); // para Postman
-
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      return callback(new Error("CORS bloqueado por origen no permitido: " + origin));
-    }
-  },
-  methods: "GET,POST,PUT,DELETE,OPTIONS",
-  allowedHeaders: "Content-Type, Authorization",
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-}));
 
 
 
