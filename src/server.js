@@ -78,6 +78,19 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
+/* *******************************************************
+   🚀 FIX DURO PARA RENDER + CLOUDFLARE
+   Forzar respuesta OPTIONS ANTES de las rutas
+******************************************************** */
+app.options("*", (req, res) => {
+  console.log("[FORZANDO PRE-FLIGHT OPTIONS]");
+  res.setHeader("Access-Control-Allow-Origin", "https://inventario-xi-nine.vercel.app");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.status(204).send();
+});
+
+
 // MUY IMPORTANTE: responder OPTIONS
 
 // Bypass ngrok warning (si tu frontend usa ngrok en pruebas)
